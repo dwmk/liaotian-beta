@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase, Profile as ProfileType, Post } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { BadgeCheck, Edit2, Check, MessageCircle, X, UserMinus } from 'lucide-react';
+import { BadgeCheck, Edit2, Check, MessageCircle, X, UserMinus, Paperclip } from 'lucide-react';
 
 export const Profile = ({ userId, onMessage }: { userId?: string; onMessage?: (profile: ProfileType) => void }) => {
   const [profile, setProfile] = useState<ProfileType | null>(null);
@@ -247,8 +247,30 @@ export const Profile = ({ userId, onMessage }: { userId?: string; onMessage?: (p
             <div className="mt-6 space-y-3">
               <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Display Name" className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500" />
               <textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Bio" rows={3} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 resize-none" />
-              <input type="url" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="Avatar URL" className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500" />
-              <input type="url" value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} placeholder="Banner URL" className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500" />
+              <div className="flex items-center gap-2">
+                <input type="url" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="Avatar URL" className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500" />
+                <button type="button" onClick={() => avatarFileInput.current?.click()} className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition flex items-center gap-2">
+                  <Paperclip size={16} />
+                </button>
+                <input ref={avatarFileInput} type="file" accept="image/*" onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const result = await uploadMedia(file, 'profiles');
+                  if (result) setAvatarUrl(result.url);
+                }} className="hidden" />
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="url" value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} placeholder="Banner URL" className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500" />
+                <button type="button" onClick={() => bannerFileInput.current?.click()} className="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition flex items-center gap-2">
+                  <Paperclip size={16} />
+                </button>
+                <input ref={bannerFileInput} type="file" accept="image/*" onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const result = await uploadMedia(file, 'profiles');
+                  if (result) setBannerUrl(result.url);
+                }} className="hidden" />
+              </div>
             </div>
           ) : (
             <div className="mt-5">
@@ -296,13 +318,29 @@ export const Profile = ({ userId, onMessage }: { userId?: string; onMessage?: (p
           </span>
         </div>
         <p className="mt-1 whitespace-pre-wrap break-words">{post.content}</p>
-        {post.image_url && (
-          <img
-            src={post.image_url}
-            className="mt-3 rounded-2xl max-h-96 object-cover w-full"
-            alt="Post"
-          />
-        )}
+        {post.media_url && (
+                  <div className="mt-3">
+                    {post.media_type === 'image' && (
+                      <img src={post.media_url} className="rounded-2xl max-h-96 object-cover w-full" alt="Post" />
+                    )}
+                    {post.media_type === 'video' && (
+                      <video controls className="rounded-2xl max-h-96 w-full">
+                        <source src={post.media_url} />
+                        Your browser does not support the video tag.
+                      </video>
+                    )}
+                    {post.media_type === 'document' && (
+                      <a
+                        href={post.media_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 p-3 bg-gray-100 rounded-lg hover:bg-gray-200 transition inline-block"
+                      >
+                        <FileText size={20} /> Download File
+                      </a>
+                    )}
+                  </div>
+                )}
       </div>
     </div>
   </div>
