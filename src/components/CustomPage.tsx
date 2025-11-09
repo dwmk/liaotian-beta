@@ -16,16 +16,7 @@ export const CustomPage = ({ slug }: CustomPageProps) => {
 
   useEffect(() => {
     const fetchPage = async () => {
-      // Try to load from Storage > pages bucket
-      const { data, error } = await supabase.storage
-        .from('pages')
-        .download(`${slug}.md`);
-
-      if (data) {
-        const text = await data.text();
-        setContent(text);
-      } else {
-        // Fallback: try public/pages in project
+        // public/pages in project
         const res = await fetch(`/pages/${slug}`, { cache: 'no-store' });
         if (res.ok) {
           const text = await res.text();
@@ -33,7 +24,7 @@ export const CustomPage = ({ slug }: CustomPageProps) => {
         } else {
           setContent('# Page Not Found\n\nThis page does not exist.');
         }
-      }
+
       setLoading(false);
     };
 
