@@ -33,8 +33,7 @@ export const Settings = () => {
     const { error } = await supabase.from('profiles').update({ theme: newTheme }).eq('id', user.id);
     setLoading(false);
     if (!error) {
-      document.body.className = `theme-${newTheme}`;
-      await loadProfile();
+      setProfile(prev => prev ? { ...prev, theme: newTheme } : null); // Update local state immediately
       setMessage({ type: 'success', text: 'Theme updated!' });
     } else {
       setMessage({ type: 'error', text: 'Failed to update theme.' });
