@@ -1,3 +1,4 @@
+// src/App.tsx
 import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Auth } from './components/Auth';
@@ -5,14 +6,22 @@ import { Feed } from './components/Feed';
 import { Messages } from './components/Messages';
 import { Profile } from './components/Profile';
 import { Search } from './components/Search';
+import { Settings } from './components/Settings';
 import { Home, MessageSquare, User, LogOut, Search as SearchIcon } from 'lucide-react';
 import { supabase } from './lib/supabase';
 
 const Main = () => {
-  const [view, setView] = useState<'feed' | 'messages' | 'profile'>('feed');
+  const [view, setView] = useState<'feed' | 'messages' | 'profile' | 'settings'>('feed');
   const [selectedProfileId, setSelectedProfileId] = useState<string | undefined>();
   const [showSearch, setShowSearch] = useState(false);
   const { user, profile, loading, signOut } = useAuth();
+
+  // Set theme from profile
+  useEffect(() => {
+    if (profile?.theme) {
+      document.body.className = `theme-${profile.theme}`;
+    }
+  }, [profile?.theme]);
 
   // === URL PROFILE LOOKUP — WORKS EVEN WHEN NOT LOGGED IN ===
   useEffect(() => {
@@ -106,6 +115,11 @@ const Main = () => {
   window.dispatchEvent(new CustomEvent('openDirectMessage', { detail: profile }));
 };
 
+const handleSettings = () => {
+  setView('settings');
+  setSelectedProfileId(undefined);
+};
+
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
@@ -158,7 +172,8 @@ const Main = () => {
       <main className="pb-20">
         {view === 'feed' && <Feed />}
         {view === 'messages' && <Messages />}
-        {view === 'profile' && <Profile userId={selectedProfileId} onMessage={handleMessageUser} />}
+        {view === 'profile' && <Profile userId={selectedProfileId} onMessage={handleMessageUser} onSettings={selectedProfileId === user.id ? handleSettings : undefined} />}
+        {view === 'settings' && <Settings />}
         {showSearch && <Search onClose={() => setShowSearch(false)} />}
       </main>
 
