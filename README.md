@@ -5,29 +5,11 @@ easy-to-host social platforms for everyone
 Current version: 1.0.4
 ```
 
-- [x] Post on the feed and customize profiles like X/Twitter
-- [x] Messaging like Telegram/WhatsApp
-- [x] User following/followers
-- [x] User profiles via url parameters (e.g. [lt.mux8.com/?liaotian](https://lt.mux8.com/?liaotian))
-- [x] Animated GIFs eligible for profile customization
-- [x] Upload files (max 10 MB)
-- [x] Upload images, videos, documents (txt, pdf, doc/x)
-- [x] User settings (to change username, email, password, etc.)
-- [x] User verification requests
-- [x] Custom themes
-- [ ] Embed links
-- [ ] Create and manage groups
-- [ ] Host audio and video calls
-- [ ] Posting long-form content, e.g. blogs
-- [ ] Custom pages/sections
-
 ### What makes LiaoTian (LT) so special from already existing social media/networking platforms?
 
 This is a project where **anyone can easily fork/clone and deploy their own** versions of this platform. This GitHub repository provides a sort of boilerplate template for making your own such platforms, in a way.
 Unlike Mastodon and other open-source and decentralized or fediverse alternatives like this, the code is **compiled into a static site**, meaning it can be easily **hosted on most free hosting providers** for $0. All it needs is a database connection via Supabase. The content **behaves as if it is dynamic and real-time**, thanks to both Vercel (as what we have used) and Supabase's real-time API features.
 Also to get started on developing your own version of LiaoTian, it's much simpler than most other "templates" out there, since it uses **only 7 files** for its actual codebase (as of now).
-
----
 
 ## 👤 Use LiaoTian itself
 If you just want to create an account on **LiaoTian** (our official deployment) then [sign up here](https://liaotian.mux8.com/).
@@ -44,4 +26,45 @@ If you just want to create an account on **LiaoTian** (our official deployment) 
    - **`VITE_FOLLOW_ONLY_FEED`** = `true` (will show only followed users' posts in the feed), `false` or missing (will show all posts from all users)
 2. Also you can modify `src/index.css` to customize the color palettes and themes to your wish.
 
+## 💎 Current features
+
+- [x] Post on the feed and customize profiles like X/Twitter
+- [x] Messaging like Telegram/WhatsApp
+- [x] User following/followers
+- [x] User profiles via url parameters (e.g. [lt.mux8.com/?liaotian](https://lt.mux8.com/?liaotian))
+- [x] Animated GIFs eligible for profile customization
+- [x] Upload files (max 10 MB)
+- [x] Upload images, videos, documents (txt, pdf, doc/x)
+- [x] User settings (to change username, email, password, etc.)
+- [x] User verification requests
+- [x] Custom themes
+- [x] Custom pages/sections
+- [ ] Embed links
+- [ ] Create and manage groups
+- [ ] Host audio and video calls
+- [ ] Posting long-form content, e.g. blogs
+- [ ] Comments and replies on posts (in a comment modal)
+- [ ] Deleting own posts from profile, via 3-dots context menu per post
+- [ ] Replying to messages
+- [ ] Online status green dots
+- [ ] Notification system (with "clear all" button to easily clear from database, too)
+- [ ] Groupchats
+- [ ] Hashtags
+- [ ] Custom sounds, e.g. notifications, clicks, etc.
+
+## 🚨 Current flaws
+- [ ] Cookie “__cf_bm” has been rejected for invalid domain. Browser console error logs sometimes.
+- [ ] removing a follower from own Profile doesn't make changes to database for some reason
+- [ ] Messaging section soft errors (406, 4XX)
+- [ ] clicking on chat button couldn't utilize the url param for user to directly open conversation with someone
+- [ ] Mobile UI for Messages cuts off overflow from right side
+- [ ] Unimplemented theme tweaks for Messages, Profiles, Settings, Search
+- [ ] Custom pages (via react router) and `vercel.json` causing issues with loading assets sometimes
+
+---
+
+## ⚖️ Legal information
 [LiaoTian](https://github.com/huanmux/liaotian) is a digital product brand/project by [Mux ZiZhiZhe Co.](https://mux8.com/zzz) under [HuanMux](https://www.linkedin.com/company/huanmux).
+
+- [[📄 Terms of Service]](public/pages/terms-of-service.md) 
+- [[📄 Privacy Policy]](public/pages/privacy-policy.md)
