@@ -416,7 +416,7 @@ export const Messages = () => {
                     <p className="whitespace-pre-wrap break-words text-sm">{msg.content}</p>
                     <span
                       className={`text-[10px] block mt-1.5 text-right ${
-                        msg.sender_id === user!.id ? 'text-orange-200/90' : 'text-gray-500'
+                        msg.sender_id === user!.id ? 'text-[rgba(var(--color-text-on-primary),0.9)]' : 'text-gray-500'
                       }`}
                     >
                       {new Date(msg.created_at).toLocaleTimeString([], {
@@ -465,7 +465,7 @@ export const Messages = () => {
               {isUploading && (
                 <div className="mb-3 w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                   <div 
-                    className="bg-orange-500 h-full transition-all duration-300"
+                    className="bg-[rgba(var(--color-accent),1)] h-full transition-all duration-300"
                     style={{ width: `${uploadProgress}%` }}
                   />
                 </div>
@@ -501,7 +501,7 @@ export const Messages = () => {
                       setFile(null);
                     }}
                     placeholder="Paste media URL..."
-                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-full focus:outline-none focus:border-orange-500"
+                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-full focus:outline-none focus:border-[rgb(var(--color-accent))]"
                   />
                 </div>
 
@@ -510,13 +510,13 @@ export const Messages = () => {
                   placeholder="Type a message..."
                   value={content}
                   onChange={handleInputChange}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-full focus:outline-none focus:border-orange-500 text-base"
+                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-full focus:outline-none focus:border-[rgb(var(--color-accent))] text-base"
                 />
 
                 <button
                   type="submit"
                   disabled={isUploading || (!content.trim() && !file && !remoteUrl.trim())}
-                  className={`p-2 rounded-full transition ${isUploading || (!content.trim() && !file && !remoteUrl.trim()) ? 'bg-gray-300 text-gray-500' : 'bg-orange-500 text-white hover:bg-orange-600'}`}
+                  className={`p-2 rounded-full transition ${isUploading || (!content.trim() && !file && !remoteUrl.trim()) ? 'bg-gray-300 text-gray-500' : 'bg-[rgba(var(--color-accent),1)] text-[rgb(var(--color-text-on-primary))] hover:bg-[rgba(var(--color-primary),1)]'}`}
                 >
                   <Send size={24} />
                 </button>
@@ -529,7 +529,7 @@ export const Messages = () => {
             <span className="text-center px-8">
               {showSidebar ? 'Select a chat on the left to start messaging.' : 'Tap the arrow to open the chat list.'}
             </span>
-            <button onClick={() => setShowSidebar(true)} className="md:hidden mt-4 bg-orange-500 text-white px-4 py-2 rounded-full hover:bg-orange-600 transition">
+            <button onClick={() => setShowSidebar(true)} className="md:hidden mt-4 bg-[rgba(var(--color-accent),1)] text-[rgb(var(--color-text-on-primary))] px-4 py-2 rounded-full hover:bg-[rgba(var(--color-primary),1)] transition">
               <ArrowLeft className="mr-2 inline" /> Back to Chats
             </button>
           </div>
