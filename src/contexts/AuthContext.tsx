@@ -9,6 +9,7 @@ type AuthContextType = {
   signUp: (email: string, password: string, username: string, displayName: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  updateProfile: (newProfile: Profile) => void;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,6 +18,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const loadProfile = async (userId: string) => {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    setProfile(data);
+    setLoading(false);
+  };
+  
+  const updateProfile = (newProfile: Profile) => {
+    setProfile(newProfile);
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -41,12 +52,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const loadProfile = async (userId: string) => {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-    setProfile(data);
-    setLoading(false);
-  };
-
   const signUp = async (email: string, password: string, username: string, displayName: string) => {
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
@@ -69,7 +74,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, signUp, signIn, signOut, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );
@@ -77,6 +82,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
   return context;
 };
