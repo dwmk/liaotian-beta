@@ -281,7 +281,7 @@ export const Messages = () => {
         return <video src={url} className="max-h-32 rounded-lg" controls />;
       }
       return (
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-2 text-sm text-[rgb(var(--color-text))]">
           <FileText size={16} />
           <span>{file.name}</span>
         </div>
@@ -295,7 +295,7 @@ export const Messages = () => {
         return <video src={remoteUrl} className="max-h-32 rounded-lg" controls />;
       }
       return (
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-2 text-sm text-[rgb(var(--color-text))]">
           <Link size={16} />
           <span className="truncate max-w-[150px]">{remoteUrl}</span>
         </div>
@@ -305,25 +305,25 @@ export const Messages = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100 overflow-hidden">
-      <div className={`w-full md:w-96 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col transition-transform duration-300 ease-in-out ${showSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} md:relative fixed inset-y-0 left-0 z-40 md:z-auto`}>
-        <div className="p-4 border-b border-gray-200 sticky top-0 bg-white z-10">
-          <h2 className="text-3xl font-extrabold text-gray-800 mb-4">Chats</h2>
+    <div className="flex h-screen bg-[rgb(var(--color-background))] overflow-hidden">
+      <div className={`w-full md:w-96 bg-[rgb(var(--color-surface))] border-r border-[rgb(var(--color-border))] flex-shrink-0 flex flex-col transition-transform duration-300 ease-in-out ${showSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} md:relative fixed inset-y-0 left-0 z-40 md:z-auto`}>
+        <div className="p-4 border-b border-[rgb(var(--color-border))] sticky top-0 bg-[rgb(var(--color-surface))] z-10">
+          <h2 className="text-3xl font-extrabold text-[rgb(var(--color-text))] mb-4">Chats</h2>
           <div className="relative">
-            <Search size={20} className="absolute left-3 top-3.5 text-gray-400" />
+            <Search size={20} className="absolute left-3 top-3.5 text-[rgb(var(--color-text-secondary))]" />
             <input
               type="text"
               placeholder="Search people..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 bg-gray-50"
+              className="w-full pl-10 pr-4 py-2 border border-[rgb(var(--color-border))] rounded-lg focus:outline-none focus:border-[rgb(var(--color-accent))] bg-[rgb(var(--color-background))] text-[rgb(var(--color-text))]"
             />
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
           {displayList.length === 0 && (
-            <div className="p-8 text-center text-gray-400">
+            <div className="p-8 text-center text-[rgb(var(--color-text-secondary))]">
               {searchQuery ? 'No users found' : 'No conversations yet'}
             </div>
           )}
@@ -336,7 +336,7 @@ export const Messages = () => {
                 setShowSidebar(false);
                 setSearchQuery('');
               }}
-              className={`w-full flex items-center gap-3 p-4 transition border-b border-gray-100 ${selectedUser?.id === u.id ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+              className={`w-full flex items-center gap-3 p-4 transition border-b border-[rgb(var(--color-border))] ${selectedUser?.id === u.id ? 'bg-[rgb(var(--color-surface-hover))]' : 'hover:bg-[rgb(var(--color-surface-hover))]'}`}
             >
               <img
                 src={u.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.username}`}
@@ -344,23 +344,23 @@ export const Messages = () => {
                 alt=""
               />
               <div className="text-left flex-1 min-w-0">
-                <div className="font-semibold flex items-center gap-1 truncate">
+                <div className="font-semibold flex items-center gap-1 truncate text-[rgb(var(--color-text))]">
                   {u.display_name}
-                  {u.verified && <BadgeCheck size={16} className="text-orange-500 flex-shrink-0" />}
+                  {u.verified && <BadgeCheck size={16} className="text-[rgb(var(--color-accent))] flex-shrink-0" />}
                 </div>
-                <div className="text-sm text-gray-500 truncate">@{u.username}</div>
+                <div className="text-sm text-[rgb(var(--color-text-secondary))] truncate">@{u.username}</div>
               </div>
             </button>
           ))}
         </div>
       </div>
 
-      <div className={`flex-1 flex flex-col bg-white transition-all duration-300 ease-in-out ${selectedUser ? '' : 'hidden md:flex'}`}>
+      <div className={`flex-1 flex flex-col bg-[rgb(var(--color-background))] transition-all duration-300 ease-in-out ${selectedUser ? '' : 'hidden md:flex'}`}>
         {selectedUser ? (
           <>
-            <div className="bg-white border-b border-gray-200 p-3 flex items-center gap-3 sticky top-0 z-20 shadow-sm">
-              <button onClick={() => setShowSidebar(true)} className="md:hidden p-1 rounded-full hover:bg-gray-100 transition">
-                <ArrowLeft size={24} className="text-gray-600" />
+            <div className="bg-[rgb(var(--color-surface))] border-b border-[rgb(var(--color-border))] p-3 flex items-center gap-3 sticky top-0 z-20 shadow-sm">
+              <button onClick={() => setShowSidebar(true)} className="md:hidden p-1 rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition">
+                <ArrowLeft size={24} className="text-[rgb(var(--color-text-secondary))]" />
               </button>
               <button onClick={() => goToProfile(selectedUser.id)} className="flex items-center gap-3 flex-1 min-w-0">
                 <img
@@ -369,16 +369,16 @@ export const Messages = () => {
                   alt=""
                 />
                 <div className="text-left min-w-0">
-                  <div className="font-bold flex items-center gap-1 truncate">
+                  <div className="font-bold flex items-center gap-1 truncate text-[rgb(var(--color-text))]">
                     {selectedUser.display_name}
-                    {selectedUser.verified && <BadgeCheck size={16} className="text-orange-500 flex-shrink-0" />}
+                    {selectedUser.verified && <BadgeCheck size={16} className="text-[rgb(var(--color-accent))] flex-shrink-0" />}
                   </div>
-                  <div className="text-sm text-gray-500 truncate">@{selectedUser.username}</div>
+                  <div className="text-sm text-[rgb(var(--color-text-secondary))] truncate">@{selectedUser.username}</div>
                 </div>
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-100">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[rgb(var(--color-background))]">
               {messages.map((msg) => (
                 <div
                   key={msg.id}
@@ -387,8 +387,8 @@ export const Messages = () => {
                   <div
                     className={`max-w-[80%] md:max-w-[65%] px-3 py-2 rounded-xl shadow-md ${
                       msg.sender_id === user!.id
-                        ? 'bg-orange-500 text-white rounded-br-none'
-                        : 'bg-white text-gray-900 border border-gray-200 rounded-tl-none'
+                        ? 'bg-[rgb(var(--color-accent))] text-[rgb(var(--color-text-on-primary))] rounded-br-none'
+                        : 'bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text))] border border-[rgb(var(--color-border))] rounded-tl-none'
                     }`}
                   >
                     {msg.media_url && (
@@ -406,7 +406,7 @@ export const Messages = () => {
                             href={msg.media_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-sm text-blue-600 underline"
+                            className="inline-flex items-center gap-1 text-sm text-[rgb(var(--color-primary))] underline"
                           >
                             <FileText size={14} /> Open File
                           </a>
@@ -416,7 +416,7 @@ export const Messages = () => {
                     <p className="whitespace-pre-wrap break-words text-sm">{msg.content}</p>
                     <span
                       className={`text-[10px] block mt-1.5 text-right ${
-                        msg.sender_id === user!.id ? 'text-[rgba(var(--color-text-on-primary),0.9)]' : 'text-gray-500'
+                        msg.sender_id === user!.id ? 'text-[rgba(var(--color-text-on-primary),0.9)]' : 'text-[rgb(var(--color-text-secondary))]'
                       }`}
                     >
                       {new Date(msg.created_at).toLocaleTimeString([], {
@@ -430,11 +430,11 @@ export const Messages = () => {
 
               {isOtherTyping && (
                 <div className="flex justify-start">
-                  <div className="bg-white px-3 py-2 rounded-xl shadow-sm border border-gray-200 rounded-tl-none">
+                  <div className="bg-[rgb(var(--color-surface))] px-3 py-2 rounded-xl shadow-sm border border-[rgb(var(--color-border))] rounded-tl-none">
                     <div className="flex gap-1 items-end">
-                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></span>
-                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-pulse" style={{ animationDelay: '200ms' }}></span>
-                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-pulse" style={{ animationDelay: '400ms' }}></span>
+                      <span className="w-2 h-2 bg-[rgb(var(--color-text-secondary))] rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></span>
+                      <span className="w-2 h-2 bg-[rgb(var(--color-text-secondary))] rounded-full animate-pulse" style={{ animationDelay: '200ms' }}></span>
+                      <span className="w-2 h-2 bg-[rgb(var(--color-text-secondary))] rounded-full animate-pulse" style={{ animationDelay: '400ms' }}></span>
                     </div>
                   </div>
                 </div>
@@ -443,9 +443,9 @@ export const Messages = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={sendMessage} className="p-3 bg-white border-t border-gray-200">
+            <form onSubmit={sendMessage} className="p-3 bg-[rgb(var(--color-surface))] border-t border-[rgb(var(--color-border))]">
               {(file || remoteUrl) && (
-                <div className="mb-3 p-3 bg-gray-50 rounded-lg flex items-center justify-between">
+                <div className="mb-3 p-3 bg-[rgb(var(--color-surface-hover))] rounded-lg flex items-center justify-between">
                   <div className="flex-1 pr-2">
                     {getPreview()}
                   </div>
@@ -455,7 +455,7 @@ export const Messages = () => {
                       setFile(null);
                       setRemoteUrl('');
                     }}
-                    className="p-1 hover:bg-gray-200 rounded-full transition"
+                    className="p-1 hover:bg-[rgb(var(--color-surface-hover))] rounded-full transition text-[rgb(var(--color-text))]"
                   >
                     <X size={18} />
                   </button>
@@ -463,7 +463,7 @@ export const Messages = () => {
               )}
 
               {isUploading && (
-                <div className="mb-3 w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                <div className="mb-3 w-full bg-[rgb(var(--color-border))] rounded-full h-2 overflow-hidden">
                   <div 
                     className="bg-[rgba(var(--color-accent),1)] h-full transition-all duration-300"
                     style={{ width: `${uploadProgress}%` }}
@@ -486,7 +486,7 @@ export const Messages = () => {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="p-2 rounded-full text-gray-500 hover:bg-gray-100 transition"
+                  className="p-2 rounded-full text-[rgb(var(--color-text-secondary))] hover:bg-[rgb(var(--color-surface-hover))] transition"
                   title="Attach file"
                 >
                   <Paperclip size={24} />
@@ -501,7 +501,7 @@ export const Messages = () => {
                       setFile(null);
                     }}
                     placeholder="Paste media URL..."
-                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-full focus:outline-none focus:border-[rgb(var(--color-accent))]"
+                    className="flex-1 px-3 py-2 text-sm border border-[rgb(var(--color-border))] rounded-full focus:outline-none focus:border-[rgb(var(--color-accent))] bg-[rgb(var(--color-background))] text-[rgb(var(--color-text))]"
                   />
                 </div>
 
@@ -510,13 +510,13 @@ export const Messages = () => {
                   placeholder="Type a message..."
                   value={content}
                   onChange={handleInputChange}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-full focus:outline-none focus:border-[rgb(var(--color-accent))] text-base"
+                  className="flex-1 px-4 py-2.5 border border-[rgb(var(--color-border))] rounded-full focus:outline-none focus:border-[rgb(var(--color-accent))] text-base bg-[rgb(var(--color-background))] text-[rgb(var(--color-text))]"
                 />
 
                 <button
                   type="submit"
                   disabled={isUploading || (!content.trim() && !file && !remoteUrl.trim())}
-                  className={`p-2 rounded-full transition ${isUploading || (!content.trim() && !file && !remoteUrl.trim()) ? 'bg-gray-300 text-gray-500' : 'bg-[rgba(var(--color-accent),1)] text-[rgb(var(--color-text-on-primary))] hover:bg-[rgba(var(--color-primary),1)]'}`}
+                  className={`p-2 rounded-full transition ${isUploading || (!content.trim() && !file && !remoteUrl.trim()) ? 'bg-[rgb(var(--color-border))] text-[rgb(var(--color-text-secondary))]' : 'bg-[rgba(var(--color-accent),1)] text-[rgb(var(--color-text-on-primary))] hover:bg-[rgba(var(--color-primary),1)]'}`}
                 >
                   <Send size={24} />
                 </button>
@@ -524,7 +524,7 @@ export const Messages = () => {
             </form>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400 flex-col">
+          <div className="flex-1 flex items-center justify-center text-[rgb(var(--color-text-secondary))] flex-col">
             <span className="text-xl font-semibold mb-2">Welcome to Messages</span>
             <span className="text-center px-8">
               {showSidebar ? 'Select a chat on the left to start messaging.' : 'Tap the arrow to open the chat list.'}
