@@ -79,3 +79,17 @@
   --color-text-secondary: 150, 150, 150; /* Secondary text - medium gray */
   --color-surface-hover: 45, 45, 45;      /* Hover states - slightly lighter surface */
 }
+
+/* Knightspeak Theme: Medieval/Heraldic Vibe (Red, Gold, Parchment) */
+.theme-knightspeak {
+  --color-primary: 150, 40, 50;    /* Deep Crimson Red (Heraldic Red) */
+  --color-accent: 255, 190, 0;    /* Royal Gold/Yellow */
+  
+  --color-background: 245, 235, 220; /* Off-White/Parchment */
+  --color-text: 40, 40, 40;          /* Very Dark Gray/Almost Black */
+  --color-text-on-primary: 255, 255, 255; /* White for text over primary color */
+  --color-surface: 255, 250, 240;  /* Card backgrounds - lighter parchment */
+  --color-border: 180, 170, 150;    /* Aged Brown/Tan Border */
+  --color-text-secondary: 90, 75, 55; /* Darker Tan/Brown Secondary Text */
+  --color-surface-hover: 235, 225, 210;  /* Subtle darker hover state */
+}
