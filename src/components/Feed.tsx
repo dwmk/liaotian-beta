@@ -19,6 +19,14 @@ export const Feed = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const isOnline = (lastSeen: string | null | undefined) => {
+    if (!lastSeen) return false;
+    const now = new Date().getTime();
+    const lastSeenTime = new Date(lastSeen).getTime();
+    const diff = now - lastSeenTime;
+    return diff < 300000; // 5 minutes
+  };
+
   const loadPosts = async () => {
     let query = supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false });
     if (FOLLOW_ONLY_FEED && user) {
@@ -263,12 +271,15 @@ export const Feed = () => {
         {posts.map((post) => (
           <div key={post.id} className="border-b border-[rgb(var(--color-border))] p-4 hover:bg-[rgb(var(--color-surface-hover))] transition bg-[rgb(var(--color-surface))]" >
             <div className="flex gap-4 items-start">
-              <button onClick={() => goToProfile(post.user_id)} className="flex-shrink-0">
+              <button onClick={() => goToProfile(post.user_id)} className="flex-shrink-0 relative">
                 <img
                   src={post.profiles?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.profiles?.username}`}
                   className="w-12 h-12 rounded-full hover:opacity-80 transition"
                   alt="Avatar"
                 />
+                {isOnline(post.profiles?.last_seen) && (
+                  <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-[rgb(var(--color-surface))] rounded-full" />
+                )}
               </button>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1 flex-wrap">
