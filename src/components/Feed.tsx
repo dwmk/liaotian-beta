@@ -19,6 +19,20 @@ export const Feed = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [showLightbox, setShowLightbox] = useState(false);
+  const [lightboxMediaUrl, setLightboxMediaUrl] = useState('');
+  const [lightboxMediaType, setLightboxMediaType] = useState<'image' | 'video' | null>(null);
+
+  const openLightbox = (url: string, type: 'image' | 'video') => {
+    setLightboxMediaUrl(url);
+    setLightboxMediaType(type);
+    setShowLightbox(true);
+  };
+
+  const formatTime = (timestamp: string) => {
+    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   const isOnline = (lastSeen: string | null | undefined) => {
     if (!lastSeen) return false;
     const now = new Date().getTime();
@@ -288,13 +302,18 @@ export const Feed = () => {
                   </button>
                   {post.profiles?.verified && <BadgeCheck size={16} className="text-[rgb(var(--color-accent))]" />}
                   <span className="text-[rgb(var(--color-text-secondary))] text-sm">@{post.profiles?.username}</span>
-                  <span className="text-[rgb(var(--color-text-secondary))] text-sm">· {new Date(post.created_at).toLocaleDateString()}</span>
+                  <span className="text-[rgb(var(--color-text-secondary))] text-sm">· {new Date(post.created_at).toLocaleDateString()} at {formatTime(post.created_at)}</span>
                 </div>
                 <p className="mt-1 whitespace-pre-wrap break-words text-[rgb(var(--color-text))]" >{post.content}</p>
                 {post.media_url && (
                   <div className="mt-3">
                     {post.media_type === 'image' && (
-                      <img src={post.media_url} className="rounded-2xl max-h-96 object-cover w-full" alt="Post" />
+                      <img 
+                        src={post.media_url} 
+                        className="rounded-2xl max-h-96 object-cover w-full cursor-pointer transition hover:opacity-90" 
+                        alt="Post" 
+                        onClick={() => openLightbox(post.media_url, 'image')}
+                      />
                     )}
                     {post.media_type === 'video' && (
                       <video controls className="rounded-2xl max-h-96 w-full">
@@ -319,6 +338,39 @@ export const Feed = () => {
           </div>
         ))}
       </div>
+
+      {showLightbox && lightboxMediaUrl && (
+        <div 
+          className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setShowLightbox(false)}
+        >
+          <div className="max-w-full max-h-full" onClick={(e) => e.stopPropagation()}>
+            {lightboxMediaType === 'image' && (
+              <img 
+                src={lightboxMediaUrl} 
+                className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" 
+                alt="Full size view"
+              />
+            )}
+            {lightboxMediaType === 'video' && (
+              <video 
+                controls 
+                autoPlay
+                className="max-w-full max-h-[90vh] rounded-2xl"
+              >
+                <source src={lightboxMediaUrl} />
+                Your browser does not support the video tag.
+              </video>
+            )}
+          </div>
+          <button 
+            onClick={() => setShowLightbox(false)}
+            className="absolute top-4 right-4 p-2 bg-white/10 text-white rounded-full hover:bg-white/20 transition"
+          >
+            <X size={24} />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
