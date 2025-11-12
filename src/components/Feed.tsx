@@ -170,7 +170,7 @@ export const Feed = () => {
               onChange={(e) => setContent(e.target.value)}
               placeholder="What's happening?"
               rows={3}
-              className="w-full px-4 py-3 border border-[rgb(var(--color-border))] rounded-2xl focus:outline-none focus:border-[rgb(var(--color-accent))] resize-none text-[rgb(var(--color-text))]"
+              className="w-full px-4 py-3 border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] rounded-2xl focus:outline-none focus:border-[rgb(var(--color-accent))] resize-none text-[rgb(var(--color-text))]"
               autoFocus
             />
             
@@ -230,7 +230,7 @@ export const Feed = () => {
                     setFile(null);
                   }}
                   placeholder="Paste image/video/file URL..."
-                  className="flex-1 min-w-0 px-3 py-1.5 text-sm border border-[rgb(var(--color-border))] rounded-full focus:outline-none focus:border-[rgb(var(--color-accent))] text-[rgb(var(--color-text))]"
+                  className="flex-1 min-w-0 px-3 py-1.5 text-sm border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] rounded-full focus:outline-none focus:border-[rgb(var(--color-accent))] text-[rgb(var(--color-text))]"
                 />
               </div>
               <button
