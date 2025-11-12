@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase, Profile as ProfileType, Post, uploadMedia } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { BadgeCheck, Edit2, Check, MessageCircle, X, UserMinus, Paperclip, FileText, Settings as SettingsIcon, MoreVertical, Trash2 } from 'lucide-react';
+import { BadgeCheck, Edit2, Check, MessageCircle, X, UserMinus, Paperclip, FileText, Settings as SettingsIcon, MoreVertical, Trash2, Camera, Crop } from 'lucide-react';
 
 export const Profile = ({ userId, onMessage, onSettings }: { userId?: string; onMessage?: (profile: ProfileType) => void; onSettings?: () => void }) => {
   const [profile, setProfile] = useState<ProfileType | null>(null);
@@ -33,6 +33,14 @@ export const Profile = ({ userId, onMessage, onSettings }: { userId?: string; on
   const [lightboxMediaUrl, setLightboxMediaUrl] = useState('');
   const [lightboxMediaType, setLightboxMediaType] = useState<'image' | 'video' | null>(null);
 
+  // NEW STATES FOR PREVIEW/CROPPING
+  const [avatarFileToCrop, setAvatarFileToCrop] = useState<File | null>(null);
+  const [bannerFileToCrop, setBannerFileToCrop] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('');
+  const [bannerPreviewUrl, setBannerPreviewUrl] = useState('');
+  const [showAvatarCropModal, setShowAvatarCropModal] = useState(false);
+  const [showBannerCropModal, setShowBannerCropModal] = useState(false);
+
   const openLightbox = (url: string, type: 'image' | 'video') => {
     setLightboxMediaUrl(url);
     setLightboxMediaType(type);
@@ -57,6 +65,65 @@ export const Profile = ({ userId, onMessage, onSettings }: { userId?: string; on
     const diff = now - lastSeenTime;
     return diff < 300000; // 5 minutes
   };
+
+  // NEW HANDLERS FOR FILE SELECTION (TO OPEN MODAL)
+  const handleAvatarFileSelect = (file: File | null) => {
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setAvatarFileToCrop(file);
+      setAvatarPreviewUrl(url); // Set the local URL for preview in the modal
+      setShowAvatarCropModal(true);
+    } else {
+      setAvatarFileToCrop(null);
+      setAvatarPreviewUrl('');
+    }
+  };
+
+  const handleBannerFileSelect = (file: File | null) => {
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setBannerFileToCrop(file);
+      setBannerPreviewUrl(url); // Set the local URL for preview in the modal
+      setShowBannerCropModal(true);
+    } else {
+      setBannerFileToCrop(null);
+      setBannerPreviewUrl('');
+    }
+  };
+
+  // SIMULATED CROP AND SAVE FUNCTION (This is where the actual upload happens after "cropping")
+  const handleCropAndSave = async (file: File, type: 'avatar' | 'banner') => {
+    if (!file) return;
+
+    // In a real app, image manipulation/cropping logic would be here before upload
+
+    const result = await uploadMedia(file, 'profiles');
+    if (result) {
+      if (type === 'avatar') {
+        setAvatarUrl(result.url);
+        setShowAvatarCropModal(false);
+        setAvatarFileToCrop(null);
+        setAvatarPreviewUrl('');
+      } else {
+        setBannerUrl(result.url);
+        setShowBannerCropModal(false);
+        setBannerFileToCrop(null);
+        setBannerPreviewUrl('');
+      }
+    } else {
+        // Handle upload failure
+        if (type === 'avatar') {
+            setShowAvatarCropModal(false);
+            setAvatarFileToCrop(null);
+            setAvatarPreviewUrl('');
+        } else {
+            setShowBannerCropModal(false);
+            setBannerFileToCrop(null);
+            setBannerPreviewUrl('');
+        }
+    }
+  };
+
 
   useEffect(() => {
     if (targetUserId) {
@@ -272,27 +339,68 @@ export const Profile = ({ userId, onMessage, onSettings }: { userId?: string; on
 
   if (!profile) return <div className="text-center p-8 text-[rgb(var(--color-text))]">Loading...</div>;
 
+  // Real-time preview URLs: prioritize newly selected file preview, then the current state URL, then the loaded profile URL.
+  const currentBannerUrl = isEditing && bannerPreviewUrl ? bannerPreviewUrl : bannerUrl || profile.banner_url;
+  const currentAvatarUrl = isEditing && avatarPreviewUrl ? avatarPreviewUrl : avatarUrl || profile.avatar_url;
+
+
   return (
     <div className="max-w-2xl mx-auto">
       <div className="bg-[rgb(var(--color-surface))]">
         <div className="relative h-48 bg-[rgb(var(--color-border))]">
-          {profile.banner_url ? (
-            <img src={profile.banner_url} className="w-full h-full object-cover" alt="Banner" />
+          {/* BANNER PREVIEW / CLICK SHORTCUT */}
+          {currentBannerUrl ? (
+            <button
+              onClick={() => isOwnProfile && isEditing && bannerFileInput.current?.click()}
+              className={`w-full h-full ${isOwnProfile && isEditing ? 'cursor-pointer group' : ''}`}
+              disabled={!isOwnProfile || !isEditing}
+            >
+              <img src={currentBannerUrl} className="w-full h-full object-cover" alt="Banner" />
+              {isOwnProfile && isEditing && (
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Camera size={48} className="text-white" />
+                </div>
+              )}
+            </button>
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-[rgba(var(--color-accent),1)] to-[rgba(var(--color-primary),1)]" />
+            <button
+              onClick={() => isOwnProfile && isEditing && bannerFileInput.current?.click()}
+              className={`w-full h-full ${isOwnProfile && isEditing ? 'cursor-pointer group' : ''}`}
+              disabled={!isOwnProfile || !isEditing}
+            >
+              <div className="w-full h-full bg-gradient-to-br from-[rgba(var(--color-accent),1)] to-[rgba(var(--color-primary),1)] flex items-center justify-center">
+                {isOwnProfile && isEditing && <Camera size={48} className="text-white" />}
+              </div>
+            </button>
           )}
         </div>
 
         <div className="relative px-4 pb-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end -mt-16">
-            <button onClick={() => !isOwnProfile && goToProfile(profile.id)} className="relative">
+            {/* AVATAR PREVIEW / CLICK SHORTCUT */}
+            <button
+              onClick={() => {
+                if (isOwnProfile && isEditing) {
+                  avatarFileInput.current?.click();
+                } else if (!isOwnProfile) {
+                  goToProfile(profile.id);
+                }
+              }}
+              className={`relative ${isOwnProfile && isEditing ? 'group cursor-pointer' : ''}`}
+            >
               <img
-                src={profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`}
-                className="w-32 h-32 rounded-full border-4 border-[rgb(var(--color-surface))] shadow-lg ring-4 ring-[rgb(var(--color-surface))] hover:opacity-90 transition"
+                // Use currentAvatarUrl for real-time preview
+                src={currentAvatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`}
+                className="w-32 h-32 rounded-full border-4 border-[rgb(var(--color-surface))] shadow-lg ring-4 ring-[rgb(var(--color-surface))] hover:opacity-90 transition object-cover"
                 alt="Avatar"
               />
               {isOnline(profile.last_seen) && (
                 <span className="absolute bottom-2 right-2 w-5 h-5 bg-green-500 border-4 border-[rgb(var(--color-surface))] rounded-full" />
+              )}
+              {isOwnProfile && isEditing && (
+                <div className="absolute inset-0 w-32 h-32 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Camera size={32} className="text-white" />
+                </div>
               )}
             </button>
 
@@ -351,6 +459,7 @@ export const Profile = ({ userId, onMessage, onSettings }: { userId?: string; on
             <div className="mt-6 space-y-3">
               <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Display Name" className="w-full px-4 py-2.5 border border-[rgb(var(--color-border))] rounded-lg focus:outline-none focus:border-[rgb(var(--color-accent))] bg-[rgb(var(--color-background))] text-[rgb(var(--color-text))]" />
               <textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Bio" rows={3} className="w-full px-4 py-2.5 border border-[rgb(var(--color-border))] rounded-lg focus:outline-none focus:border-[rgb(var(--color-accent))] resize-none bg-[rgb(var(--color-background))] text-[rgb(var(--color-text))]" />
+              {/* AVATAR UPLOAD FIELD (HIDDEN) */}
               <div className="flex items-center gap-2">
                 <input 
                   type="url" 
@@ -370,15 +479,11 @@ export const Profile = ({ userId, onMessage, onSettings }: { userId?: string; on
                   ref={avatarFileInput} 
                   type="file" 
                   accept="image/*" 
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const result = await uploadMedia(file, 'profiles');
-                    if (result) setAvatarUrl(result.url);
-                  }} 
+                  onChange={(e) => handleAvatarFileSelect(e.target.files?.[0] || null)}
                   className="hidden" 
                 />
               </div>
+              {/* BANNER UPLOAD FIELD (HIDDEN) */}
               <div className="flex items-center gap-2">
                 <input 
                   type="url" 
@@ -398,12 +503,7 @@ export const Profile = ({ userId, onMessage, onSettings }: { userId?: string; on
                   ref={bannerFileInput} 
                   type="file" 
                   accept="image/*" 
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const result = await uploadMedia(file, 'profiles');
-                    if (result) setBannerUrl(result.url);
-                  }} 
+                  onChange={(e) => handleBannerFileSelect(e.target.files?.[0] || null)}
                   className="hidden" 
                 />
               </div>
@@ -521,6 +621,64 @@ export const Profile = ({ userId, onMessage, onSettings }: { userId?: string; on
   </div>
 ))}
       </div>
+
+      {/* AVATAR CROP MODAL PLACEHOLDER */}
+      {showAvatarCropModal && avatarFileToCrop && (
+        <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4" onClick={() => setShowAvatarCropModal(false)}>
+          <div className="bg-[rgb(var(--color-surface))] rounded-2xl w-full max-w-lg flex flex-col p-6 text-[rgb(var(--color-text))]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-xl flex items-center gap-2"><Crop size={20} /> Crop Avatar</h3>
+                <button onClick={() => setShowAvatarCropModal(false)} className="p-2 text-[rgb(var(--color-text))] hover:bg-[rgb(var(--color-surface-hover))] rounded-full">
+                    <X size={20} />
+                </button>
+            </div>
+            <div className="flex justify-center items-center h-64 w-full bg-[rgb(var(--color-background))] rounded-lg overflow-hidden relative mb-4">
+                {/* Real-time preview of the image for cropping */}
+                <img src={avatarPreviewUrl} className="max-w-full max-h-full object-contain" alt="Avatar Crop Preview" />
+                {/* PLACEHOLDER FOR CROPPING UI */}
+                <div className="absolute inset-0 border-4 border-dashed border-white/50 pointer-events-none flex items-center justify-center">
+                    <span className="text-white/70 text-sm">Cropping Area Placeholder</span>
+                </div>
+            </div>
+            <p className="text-sm text-[rgb(var(--color-text-secondary))] mb-4">Adjust the image to fit the desired square region. (Cropping functionality is simulated)</p>
+            <button
+              onClick={() => handleCropAndSave(avatarFileToCrop, 'avatar')}
+              className="w-full py-3 bg-[rgba(var(--color-accent),1)] text-[rgb(var(--color-text-on-primary))] rounded-full font-semibold hover:bg-[rgba(var(--color-primary),1)] transition"
+            >
+              Crop & Save Avatar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* BANNER CROP MODAL PLACEHOLDER */}
+      {showBannerCropModal && bannerFileToCrop && (
+        <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4" onClick={() => setShowBannerCropModal(false)}>
+          <div className="bg-[rgb(var(--color-surface))] rounded-2xl w-full max-w-2xl flex flex-col p-6 text-[rgb(var(--color-text))]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-xl flex items-center gap-2"><Crop size={20} /> Crop Banner</h3>
+                <button onClick={() => setShowBannerCropModal(false)} className="p-2 text-[rgb(var(--color-text))] hover:bg-[rgb(var(--color-surface-hover))] rounded-full">
+                    <X size={20} />
+                </button>
+            </div>
+            <div className="flex justify-center items-center h-48 w-full bg-[rgb(var(--color-background))] rounded-lg overflow-hidden relative mb-4">
+                {/* Real-time preview of the image for cropping */}
+                <img src={bannerPreviewUrl} className="w-full h-full object-cover" alt="Banner Crop Preview" />
+                {/* PLACEHOLDER FOR CROPPING UI */}
+                <div className="absolute inset-0 border-4 border-dashed border-white/50 pointer-events-none flex items-center justify-center">
+                    <span className="text-white/70 text-sm">Cropping Area Placeholder</span>
+                </div>
+            </div>
+            <p className="text-sm text-[rgb(var(--color-text-secondary))] mb-4">Adjust the image to fit the desired wide region. (Cropping functionality is simulated)</p>
+            <button
+              onClick={() => handleCropAndSave(bannerFileToCrop, 'banner')}
+              className="w-full py-3 bg-[rgba(var(--color-accent),1)] text-[rgb(var(--color-text-on-primary))] rounded-full font-semibold hover:bg-[rgba(var(--color-primary),1)] transition"
+            >
+              Crop & Save Banner
+            </button>
+          </div>
+        </div>
+      )}
 
       {showDeleteModal && postToDelete && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => {
