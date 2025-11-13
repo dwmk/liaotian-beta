@@ -943,7 +943,7 @@ export const Profile = ({ userId, onMessage, onSettings }: { userId?: string; on
             : 'text-[rgb(var(--color-text-secondary))] hover:bg-[rgb(var(--color-surface-hover))]'
           }`}
         >
-          <Grid size={18} />
+          <Image size={18} />
           Posts
         </button>
         <button 
@@ -954,7 +954,7 @@ export const Profile = ({ userId, onMessage, onSettings }: { userId?: string; on
             : 'text-[rgb(var(--color-text-secondary))] hover:bg-[rgb(var(--color-surface-hover))]'
           }`}
         >
-          <Image size={18} />
+          <Grid size={18} />
           Media
         </button>
         <button 
