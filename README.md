@@ -2,7 +2,7 @@
 easy-to-host social platforms for everyone
 
 ```
-Current version: 1.0.6
+Current version: 1.0.7
 ```
 
 ### What makes LiaoTian (LT) so special from already existing social media/networking platforms?
@@ -42,15 +42,18 @@ If you just want to create an account on **LiaoTian** (our official deployment) 
 - [x] Deleting own posts from profile, via 3-dots context menu per post
 - [x] Replying to messages
 - [x] Online status green dots
+- [x] Host audio and video calls
+- [x] Comments and replies on posts (in a comment modal)
+- [x] Multiple tabs on Profile for posts, media, and likes. Media tab is in a classic *Instagram*-like grid.
+- [x] Multiple tabs on Feed for posts and shots ("shorts/"reels") in *TikTok*-like swipe navigation UI.
 - [ ] Embed links
 - [ ] Create and manage groups
-- [ ] Host audio and video calls
 - [ ] Posting long-form content, e.g. blogs
-- [ ] Comments and replies on posts (in a comment modal)
 - [ ] Notification system (with "clear all" button to easily clear from database, too)
 - [ ] Groupchats
 - [ ] Hashtags
 - [ ] Custom sounds, e.g. notifications, clicks, etc.
+
 
 ## 🚨 Current flaws
 - [ ] Cookie “__cf_bm” has been rejected for invalid domain. Browser console error logs sometimes.
