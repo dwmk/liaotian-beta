@@ -1,5 +1,5 @@
 // Feed.tsx
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase, Post, uploadMedia } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Send, BadgeCheck, Edit3, Image, FileText, X, Paperclip, Link, Heart, MessageCircle } from 'lucide-react';
@@ -85,7 +85,7 @@ export const Feed = () => {
     return diff < 300000; // 5 minutes
   };
 
-  const fetchUserLikes = async (currentPosts: Post[]) => {
+  const fetchUserLikes = useCallback(async (currentPosts: Post[]) => {
     if (!user || currentPosts.length === 0) return;
     const postIds = currentPosts.map(p => p.id);
     const { data } = await supabase
@@ -99,10 +99,10 @@ export const Feed = () => {
       // --- MODIFICATION: Add to existing set, don't replace
       setLikedPostIds(prevSet => new Set([...prevSet, ...data.map(d => d.entity_id)]));
     }
-  };
+  }, [user]);
 
   // --- MODIFICATION: Load only first page
-  const loadPosts = async () => {
+  const loadPosts = useCallback(async () => {
     setPosts([]);
     setPostPage(0);
     setHasMorePosts(true);
@@ -131,10 +131,10 @@ export const Feed = () => {
     }
     
     fetchUserLikes(loadedPosts);
-  };
+  }, [user, fetchUserLikes]);
   
   // --- NEW: Load more posts for infinite scroll
-  const loadMorePosts = async () => {
+  const loadMorePosts = useCallback(async () => {
     if (isLoadingMorePosts || !hasMorePosts) return;
     
     setIsLoadingMorePosts(true);
@@ -168,7 +168,7 @@ export const Feed = () => {
     
     fetchUserLikes(newPosts);
     setIsLoadingMorePosts(false);
-  };
+  }, [isLoadingMorePosts, hasMorePosts, postPage, user, fetchUserLikes]);
 
   // Handle Likes
   const handleToggleLike = async (post: Post) => {
@@ -246,6 +246,9 @@ export const Feed = () => {
     setIsPostingComment(false);
   };
 
+  // --- FIX: Split useEffect into two hooks ---
+
+  // Effect 1: Handles initial load and Supabase subscriptions
   useEffect(() => {
     loadPosts();
 
@@ -269,6 +272,13 @@ export const Feed = () => {
       if (data) setPosts(current => [data, ...current]);
     }).subscribe();
 
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, loadPosts]); // Only depends on user and the memoized loadPosts
+
+  // Effect 2: Handles scroll listening for composer shrink and pagination
+  useEffect(() => {
     const handleScroll = () => {
       // Handle composer shrink
       const scrolled = window.scrollY > 100;
@@ -286,10 +296,11 @@ export const Feed = () => {
     };
     window.addEventListener('scroll', handleScroll);
     return () => {
-      supabase.removeChannel(channel);
       window.removeEventListener('scroll', handleScroll);
     };
-  }, [user, isExpanded, hasMorePosts, isLoadingMorePosts]); // <-- Added dependencies
+  }, [isExpanded, hasMorePosts, isLoadingMorePosts, loadMorePosts]); // Depends on scroll-related state
+
+  // --- END FIX ---
 
   const createPost = async (e: React.FormEvent) => {
     e.preventDefault();
