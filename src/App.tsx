@@ -150,7 +150,7 @@ const Main = () => {
               <img 
                 src="https://mux8.com/assets/logo/liaotian-dragon.svg" 
                 alt="LiaoTian logo"
-                className="h-10"
+                className="h-10 font-black bg-gradient-to-r from-[rgba(var(--color-primary),1)] via-[rgba(var(--color-accent),1)] to-[rgba(var(--color-primary),1)] bg-clip-text text-transparent"
               />
               <a href="/" className="text-[rgb(var(--color-primary))] hover:text-[rgba(var(--color-primary),0.8)] font-bold">
                 ← Back to Home
@@ -182,7 +182,7 @@ const Main = () => {
          <img 
             src="https://mux8.com/assets/logo/liaotian-dragon.svg" 
             alt="LiaoTian logo"
-            className="h-10" // Adjusted for the header height
+            className="h-10 font-black bg-gradient-to-r from-[rgba(var(--color-primary),1)] via-[rgba(var(--color-accent),1)] to-[rgba(var(--color-primary),1)] bg-clip-text text-transparent" // Adjusted for the header height
           />
           <div className="flex items-center gap-2">
             <button
