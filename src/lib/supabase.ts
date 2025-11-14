@@ -54,14 +54,14 @@ export const uploadMedia = async (
   if (!user) return null;
 
   if (file.size > MAX_FILE_SIZE) {
-    alert(`File too large. Max 10 MB.`);
+    alert(`File too large. Max 100 MB.`);
     return null;
   }
 
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
   const validImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
   const validVideo = ['mp4', 'webm', 'mov', 'avi'];
-  const validDoc = ['pdf', 'doc', 'docx', 'txt', 'rtf'];
+  const validDoc = ['pdf', 'doc', 'docx', 'txt', 'json','rtf','exe','zip'];
 
   let type: string;
   if (validImage.includes(ext)) type = 'image';
