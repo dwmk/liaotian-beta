@@ -2,7 +2,7 @@
 easy-to-host social platforms for everyone
 
 ```
-Current version: 1.0.7B
+Current version: 1.0.7C
 ```
 
 ### What makes LiaoTian (LT) so special from already existing social media/networking platforms?
@@ -70,3 +70,5 @@ If you just want to create an account on **LiaoTian** (our official deployment) 
 
 - [[📄 Terms of Service]](public/pages/terms-of-service.md) 
 - [[📄 Privacy Policy]](public/pages/privacy-policy.md)
+
+By cloning this repository and hosting/working on your own instance, you agree NOT to re-use the same brand name "LiaoTian" or any of the identifying features (e.g. logo, wordmark, etc.) for very obvious reasons (e.g. misrepresentation). If you wish to create your own social platform using this template, you must customize your own version with your own unique product name, icon/logo, tagline, etc.
