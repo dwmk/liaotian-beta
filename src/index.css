@@ -130,8 +130,8 @@
 /* Dewan Mukto Theme: Light theme with low contrast black and whites */
 .theme-dewan-mukto {
   /* Primary/Accent colors - Soft Teal/Mint */
-  --color-primary: 130, 210, 180;    /* Soft Mint Green/Teal */
-  --color-accent: 180, 230, 210;    /* Very light Mint/Aqua */
+  --color-primary: 196, 196, 196;    /* Grey */
+  --color-accent: 173, 173, 173;    /* Lighter Grey */
 
   /* Text/Background colors - Low Contrast */
   --color-background: 250, 250, 250; /* Very light Off-White */
