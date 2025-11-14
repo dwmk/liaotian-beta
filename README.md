@@ -2,7 +2,7 @@
 easy-to-host social platforms for everyone
 
 ```
-Current version: 1.0.7A
+Current version: 1.0.7B
 ```
 
 ### What makes LiaoTian (LT) so special from already existing social media/networking platforms?
