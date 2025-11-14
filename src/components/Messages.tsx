@@ -447,7 +447,7 @@ export const Messages = () => {
   };
 
   return (
-    <div className="flex flex-1 bg-[rgb(var(--color-background))] overflow-hidden">
+    <div className="flex h-full bg-[rgb(var(--color-background))] overflow-hidden">
       <Calls />
       <div className={`w-full md:w-96 bg-[rgb(var(--color-surface))] border-r border-[rgb(var(--color-border))] flex-shrink-0 flex flex-col transition-transform duration-300 ease-in-out ${showSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} md:relative fixed inset-y-0 left-0 z-40 md:z-auto`}>
         <div className="p-4 border-b border-[rgb(var(--color-border))] sticky top-0 bg-[rgb(var(--color-surface))] z-10">
