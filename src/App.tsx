@@ -150,15 +150,9 @@ const Main = () => {
     return <CustomPage slug={pageSlug} />;
   }
   
-  // STATS page is protected by checking if user exists
-  if (view === 'stats' && user) {
+  // STATS page
+  if (view === 'stats') {
       return <Stats />;
-  }
-  
-  // If user is trying to access stats without being logged in
-  if (view === 'stats' && !user) {
-    // Redirect to login/auth page
-    setView('feed'); 
   }
 
 
