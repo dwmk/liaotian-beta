@@ -9,6 +9,9 @@ import {
 
 // --- CONFIGURATION CONSTANTS ---
 
+// Define the exact launch timestamp for the platform (UTC time)
+const PLATFORM_LAUNCH_DATE = '2025-11-07T12:51:03.751Z';
+
 // Define the tables you want to get entry counts for.
 const TABLE_COUNT_STATS = [
   { key: 'profiles', icon: Users, description: 'Total User Accounts', type: 'count' as const, table: 'profiles' },
@@ -31,7 +34,7 @@ const RECENT_LIMIT = 5; // Number of users to fetch for recent panels
 
 // --- TYPE DEFINITIONS ---
 
-type StatType = 'count' | 'activity' | 'highest_follower' | 'recent_users' | 'recent_online';
+type StatType = 'count' | 'activity' | 'highest_follower' | 'recent_users' | 'recent_online' | 'time_since_launch';
 
 // Profile type for lists
 type ProfileListItem = {
@@ -79,6 +82,51 @@ const formatTimeAgo = (isoString: string | undefined): string => {
     if (days < 30) return `${days}d ago`;
     const months = Math.floor(days / 30);
     return `${months}mo ago`;
+};
+
+// Helper function to calculate time difference and format it as requested
+const calculateTimeSinceLaunch = (launchDate: string): string => {
+    const start = new Date(launchDate).getTime();
+    const now = new Date().getTime();
+    let diffMs = now - start;
+
+    if (diffMs < 0) return 'Platform launching soon!';
+
+    const msInHour = 1000 * 60 * 60;
+    const msInDay = msInHour * 24;
+
+    let remainingMs = diffMs;
+    const parts = [];
+
+    // Approximation for Years (365.25 days)
+    const years = Math.floor(remainingMs / (msInDay * 365.25));
+    if (years > 0) {
+        parts.push(`${years} years`);
+        remainingMs %= (msInDay * 365.25);
+    }
+
+    // Approximation for Months (30.44 days)
+    const months = Math.floor(remainingMs / (msInDay * 30.44));
+    if (months > 0) {
+        parts.push(`${months} months`);
+        remainingMs %= (msInDay * 30.44);
+    }
+
+    // Exact Days and Hours from remaining milliseconds
+    const days = Math.floor(remainingMs / msInDay);
+    remainingMs %= msInDay;
+
+    const hours = Math.floor(remainingMs / msInHour);
+
+    if (years > 0 || months > 0) {
+        // Maximum format: YY years MM months DD days HH hours
+        if (days > 0) parts.push(`${days} days`);
+        if (hours > 0) parts.push(`${hours} hours`);
+        return parts.join(' ');
+    } else {
+        // Minimum format: DD days and HH hours
+        return `${days} days and ${hours} hours`;
+    }
 };
 
 // --- FETCH LOGIC ---
@@ -257,6 +305,32 @@ const fetchHighestFollower = async (): Promise<Statistic> => {
     }
 };
 
+// Fetches the calculated time since launch
+const fetchTimeSinceLaunch = async (): Promise<Statistic> => {
+    const key = 'time_since_launch';
+    const label = 'Time Since Launch';
+    const icon = Clock;
+
+    try {
+        const timeString = calculateTimeSinceLaunch(PLATFORM_LAUNCH_DATE);
+        return {
+            key, label, icon,
+            value: timeString,
+            error: false,
+            type: 'time_since_launch'
+        } as Statistic;
+    } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : 'Unknown Error';
+        return {
+            key, label, icon,
+            value: 'Error',
+            error: true,
+            errorMessage: `(Failed to calculate time: ${errorMessage})`,
+            type: 'time_since_launch'
+        } as Statistic;
+    }
+};
+
 // Fetches the 5 most recently joined users by 'created_at'
 const fetchRecentlyJoinedUsers = async (): Promise<Statistic> => {
     const key = 'recently_joined';
@@ -342,12 +416,14 @@ export const Stats: React.FC = () => {
           tableCounts,
           activityStats,
           highestFollowerStat,
+          timeSinceLaunchStat,
           recentlyJoinedUsersStat,
           recentlyOnlineUsersStat,
         ] = await Promise.all([
           fetchTableCounts(),
           fetchActivityStats(),
           fetchHighestFollower(),
+          fetchTimeSinceLaunch(), // Fetch new stat
           fetchRecentlyJoinedUsers(),
           fetchRecentlyOnlineUsers(),
         ]);
@@ -356,6 +432,7 @@ export const Stats: React.FC = () => {
             ...tableCounts,
             ...activityStats,
             highestFollowerStat,
+            timeSinceLaunchStat, // Add to allStats
             recentlyJoinedUsersStat,
             recentlyOnlineUsersStat,
         ];
@@ -437,7 +514,7 @@ export const Stats: React.FC = () => {
 
 
     return (
-        <div key={stat.key} className="p-6 rounded-xl shadow-lg bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]">
+        <div key={stat.key} className="p-6 rounded-xl shadow-lg bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] h-full">
             <h3 className="text-sm font-medium text-[rgb(var(--color-text-secondary))] uppercase tracking-wider flex items-center mb-4 border-b pb-2 border-[rgb(var(--color-border))]">
                 <Icon className="h-4 w-4 mr-2 text-[rgb(var(--color-primary))]" /> {stat.label}
             </h3>
@@ -486,7 +563,7 @@ export const Stats: React.FC = () => {
 
     if (isError) {
         return (
-             <div key={stat.key} className="p-6 rounded-xl shadow-lg bg-red-50 border border-red-200 col-span-full">
+             <div key={stat.key} className="p-6 rounded-xl shadow-lg bg-red-50 border border-red-200">
                 <h3 className="text-sm font-medium text-red-800 uppercase tracking-wider flex items-center mb-4">
                     <AlertTriangle className="h-4 w-4 mr-2" /> {stat.label}
                 </h3>
@@ -497,7 +574,7 @@ export const Stats: React.FC = () => {
 
     if (profile) {
         return (
-            <div key={stat.key} className="p-6 rounded-xl shadow-lg transition-all duration-300 hover:shadow-xl bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] col-span-full">
+            <div key={stat.key} className="p-6 rounded-xl shadow-lg transition-all duration-300 hover:shadow-xl bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))]">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-medium text-[rgb(var(--color-text-secondary))] uppercase tracking-wider flex items-center">
                         <Icon className="h-4 w-4 mr-2 text-[rgb(var(--color-primary))]" /> {stat.label}
@@ -533,9 +610,39 @@ export const Stats: React.FC = () => {
     return null;
   };
 
+  // Renders the Time Since Launch card
+  const renderTimeSinceLaunchCard = (stat: Statistic) => {
+      const Icon = stat.icon;
+      const isError = stat.error || stat.value === 'Error';
+
+      if (isError) {
+          return (
+               <div key={stat.key} className="p-4 rounded-xl shadow-md bg-red-50 border border-red-200 h-full">
+                  <h4 className="text-xs font-medium text-red-800 uppercase tracking-wider flex items-center mb-1">
+                      <AlertTriangle className="h-3 w-3 mr-1" /> {stat.label}
+                  </h4>
+                  <p className="text-red-600 text-sm">{stat.errorMessage || 'Failed to fetch time.'}</p>
+               </div>
+          );
+      }
+
+      return (
+          <div key={stat.key} className="p-4 rounded-xl shadow-md bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] h-full flex flex-col justify-center">
+              <h4 className="text-xs font-medium text-[rgb(var(--color-text-secondary))] uppercase tracking-wider flex items-center mb-1">
+                  <Icon className="h-4 w-4 mr-2 text-[rgb(var(--color-primary))]" /> {stat.label}
+              </h4>
+              <p className="text-base font-bold text-[rgb(var(--color-text))] break-words">
+                  {stat.value as string}
+              </p>
+          </div>
+      );
+  };
+
+
   const tableStats = stats.filter(s => s.type === 'count');
   const activityStats = stats.filter(s => s.type === 'activity');
   const highestFollowerStat = stats.find(s => s.type === 'highest_follower');
+  const timeSinceLaunchStat = stats.find(s => s.type === 'time_since_launch');
   const recentlyJoinedUsersStat = stats.find(s => s.type === 'recent_users');
   const recentlyOnlineUsersStat = stats.find(s => s.type === 'recent_online');
 
@@ -547,7 +654,7 @@ export const Stats: React.FC = () => {
           Platform Statistics
         </h2>
         <p className="ml-3 mt-1 text-lg text-[rgb(var(--color-text-secondary))]">
-          Real-time database counts and user activity.
+          Database counts and user activity.
         </p>
       </div>
 
@@ -563,12 +670,15 @@ export const Stats: React.FC = () => {
             <TrendingUp className="h-5 w-5 mr-2 text-[rgb(var(--color-accent))]" /> Top Community & Recent Activity
           </h3>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
-            {/* Column 1: Highest Follower Profile */}
-            {highestFollowerStat && (
-                <div className="lg:col-span-1">
-                    {renderHighestFollowerCard(highestFollowerStat)}
-                </div>
-            )}
+            {/* Column 1: Highest Follower Profile & Time Since Launch */}
+            <div className="lg:col-span-1 flex flex-col gap-6">
+                {highestFollowerStat && (
+                    renderHighestFollowerCard(highestFollowerStat)
+                )}
+                {timeSinceLaunchStat && (
+                    renderTimeSinceLaunchCard(timeSinceLaunchStat)
+                )}
+            </div>
             {/* Column 2: Recently Joined Users */}
             {recentlyJoinedUsersStat && (
                 <div className="lg:col-span-1">
