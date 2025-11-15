@@ -351,46 +351,6 @@ export const Shots = () => {
         </div>
       )}
 
-      {activeLikesId && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
-          onClick={() => setActiveLikesId(null)}
-        >
-          <div 
-            className="bg-[rgb(var(--color-surface))] w-full max-w-md max-h-[80vh] rounded-2xl flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center p-4 border-b border-[rgb(var(--color-border))]">
-              <h2 className="text-xl font-bold text-[rgb(var(--color-text))]">
-                Liked by
-              </h2>
-              <button onClick={() => setActiveLikesId(null)} className="text-[rgb(var(--color-text-secondary))] hover:text-[rgb(var(--color-text))]">
-                <X size={24} />
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-4">
-              {likersList.length === 0 ? (
-                <p className="text-[rgb(var(--color-text-secondary))] text-center py-4">No likes yet.</p>
-              ) : (
-                likersList.map((liker) => (
-                  <div key={liker.user_id} className="flex items-center gap-3 py-2 border-b border-[rgb(var(--color-border))] last:border-b-0">
-                    <img src={liker.profiles.avatar_url} className="w-10 h-10 rounded-full" alt={`${liker.profiles.username}'s avatar`} />
-                    <div>
-                      <span className="font-bold text-sm text-[rgb(var(--color-text))] flex items-center">
-                        {liker.profiles.display_name}
-                        {liker.profiles.verified && <BadgeCheck size={14} className="ml-1 text-[rgb(var(--color-accent))]" fill="currentColor" />}
-                      </span>
-                      <span className="text-xs text-[rgb(var(--color-text-secondary))]">@{liker.profiles.username}</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {activeCommentsId && (
         <div className="absolute inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-4 animate-in fade-in">
           <div className="bg-[rgb(var(--color-surface))] w-full max-w-sm h-[70vh] rounded-t-2xl sm:rounded-2xl flex flex-col">
