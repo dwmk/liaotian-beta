@@ -70,7 +70,6 @@ If you just want to create an account on **LiaoTian** (our official deployment) 
 - [ ] Cookie “__cf_bm” has been rejected for invalid domain. Browser console error logs sometimes.
 - [ ] removing a follower from own Profile doesn't make changes to database for some reason
 - [ ] Messaging section soft errors (406, 4XX)
-- [ ] clicking on chat button couldn't utilize the url param for user to directly open conversation with someone
 - [ ] message replies don't show text content for some reason
 - [ ] audio and video calling may require a turn server
 
