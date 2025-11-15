@@ -915,7 +915,7 @@ export const Profile = ({ userId, onMessage, onSettings }: { userId?: string; on
     if (!profile?.username) return;
 
     // 1. Set URL
-    window.history.replaceState({}, '', `/?${profile.username}`);
+    window.history.replaceState({}, '', `/message?${profile.username}`);
 
     // 2. Trigger BOTH: App.tsx handler + direct open in Messages
     onMessage?.(profile);
