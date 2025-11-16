@@ -57,6 +57,13 @@ export type Status = {
 // === STORAGE HELPERS ===
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
+export const uploadStatusMedia = async (
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<{ url: string; type: string } | null> => {
+  return uploadMedia(file, 'statuses', onProgress);
+};
+
 export const uploadMedia = async (
   file: File,
   folder: 'posts' | 'messages' | 'profiles',
