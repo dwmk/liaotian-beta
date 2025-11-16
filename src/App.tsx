@@ -13,6 +13,7 @@ import { Home, MessageSquare, User, LogOut, Search as SearchIcon } from 'lucide-
 import { supabase } from './lib/supabase';
 import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
+import { StatusSidebar, StatusArchive, Status } from './components/Status';
 
 type ViewType = 'feed' | 'messages' | 'profile' | 'settings' | 'page' | 'stats'; 
 
