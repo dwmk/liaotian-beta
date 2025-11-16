@@ -18,7 +18,8 @@ const presets: ThemePreset[] = [
   { value: 'wildest-dimensions', name: 'Wildest Dimensions', desc: 'Special theme for Radiyana, in the Wildest Dimensions. Feel the high life.'},
   { value: 'mahir-beats', name: 'Mahir Beats', desc: 'Special theme for Mahir. Deep dark blues. Enjoy the cruise.'},
   { value: 'dewan-mukto', name: 'Dewan Mukto', desc: 'Low contrast within pure black and white. Timeless.'},
-  { value: 'marlizo', name: 'Marlizo', desc: 'Special theme for Marlizo. Dante from Devil May Cry will love this.'}
+  { value: 'marlizo', name: 'Marlizo', desc: 'Special theme for Marlizo. Dante from Devil May Cry will love this.'},
+  { value: 'invincible', name: 'Invincible', desc: 'Not invisible, yet invincible. This is a theme for people like A.A.A. who are the role models of IT. Pure OLED darkness.'}
 ];
 
 interface ThemesProps {
