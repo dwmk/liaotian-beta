@@ -9,9 +9,24 @@ CREATE TABLE statuses (
   media_type TEXT CHECK (media_type IN ('image', 'video')) NOT NULL,
   text_overlay JSONB DEFAULT '{}'::JSONB,  -- e.g., {"text": "Hello", "x": 50, "y": 50, "fontSize": 24, "color": "white"}
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-  expires_at TIMESTAMP WITH TIME ZONE GENERATED ALWAYS AS (created_at + INTERVAL '24 hours') STORED,
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
   viewed_by UUID[] DEFAULT ARRAY[]::UUID[]  -- Optional: track viewers
 );
+
+-- Trigger function to set expires_at
+CREATE OR REPLACE FUNCTION set_status_expires()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.expires_at = NEW.created_at + INTERVAL '24 hours';
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to automatically set expires_at on insert
+CREATE TRIGGER trigger_set_status_expires
+  BEFORE INSERT ON statuses
+  FOR EACH ROW
+  EXECUTE FUNCTION set_status_expires();
 
 -- Indexes for performance
 CREATE INDEX idx_statuses_user_expires ON statuses(user_id, expires_at DESC);
