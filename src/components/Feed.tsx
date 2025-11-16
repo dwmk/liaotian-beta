@@ -2,8 +2,117 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase, Post, uploadMedia } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Send, BadgeCheck, Edit3, Image, FileText, X, Paperclip, Link, Heart, MessageCircle, LayoutGrid, Smartphone } from 'lucide-react';
+import { Send, BadgeCheck, Edit3, Image, FileText, X, Paperclip, Link, Heart, MessageCircle, LayoutGrid, Smartphone, Play, Pause } from 'lucide-react';
 import { Shots } from './Shots';
+
+// --- NEW AudioPlayer COMPONENT FOR FEED ---
+interface AudioPlayerProps {
+  src: string;
+}
+
+const AudioPlayer: React.FC<AudioPlayerProps> = ({ src }) => {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+
+  // Use fixed accent colors for the player in the feed context
+  const primaryColor = 'rgb(var(--color-accent))';
+  const trackColor = 'rgb(var(--color-border))';
+  
+  const formatTime = (time: number): string => {
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const setAudioData = () => {
+      setDuration(audio.duration);
+      setCurrentTime(audio.currentTime);
+    };
+
+    const setAudioTime = () => setCurrentTime(audio.currentTime);
+
+    const togglePlay = () => setIsPlaying(!audio.paused);
+
+    audio.addEventListener('loadedmetadata', setAudioData);
+    audio.addEventListener('timeupdate', setAudioTime);
+    audio.addEventListener('play', togglePlay);
+    audio.addEventListener('pause', togglePlay);
+    audio.addEventListener('ended', () => {
+        setIsPlaying(false);
+        audio.currentTime = 0; // Reset after playing
+    });
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', setAudioData);
+      audio.removeEventListener('timeupdate', setAudioTime);
+      audio.removeEventListener('play', togglePlay);
+      audio.removeEventListener('pause', togglePlay);
+      audio.removeEventListener('ended', () => {});
+    };
+  }, []);
+
+  const handlePlayPause = () => {
+    const audio = audioRef.current;
+    if (audio) {
+      if (isPlaying) {
+        audio.pause();
+      } else {
+        audio.play();
+      }
+    }
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const time = parseFloat(e.target.value);
+    const audio = audioRef.current;
+    if (audio) {
+      audio.currentTime = time;
+      setCurrentTime(time);
+    }
+  };
+
+  return (
+    <div className="flex items-center space-x-2 w-full max-w-full p-2 bg-[rgb(var(--color-surface-hover))] rounded-xl">
+      <audio ref={audioRef} src={src} preload="metadata" className="hidden" />
+      
+      <button 
+        onClick={handlePlayPause}
+        className={`flex-shrink-0 p-2 rounded-full transition-colors`}
+        style={{
+            backgroundColor: 'rgb(var(--color-accent))', 
+            color: 'rgb(var(--color-text-on-primary))',
+        }}
+      >
+        {isPlaying ? <Pause size={16} fill="rgb(var(--color-text-on-primary))" /> : <Play size={16} fill="rgb(var(--color-text-on-primary))" />}
+      </button>
+
+      <div className="flex-1 min-w-0 flex items-center gap-2">
+        <input
+          type="range"
+          min="0"
+          max={duration}
+          step="0.01"
+          value={currentTime}
+          onChange={handleSeek}
+          className="w-full h-1 appearance-none rounded-full cursor-pointer transition"
+          style={{
+            background: `linear-gradient(to right, ${primaryColor} 0%, ${primaryColor} ${((currentTime / duration) * 100) || 0}%, ${trackColor} ${((currentTime / duration) * 100) || 0}%, ${trackColor} 100%)`,
+          }}
+        />
+        <span className="text-xs flex-shrink-0 text-[rgb(var(--color-text-secondary))]">
+          {formatTime(currentTime)}/{formatTime(duration)}
+        </span>
+      </div>
+    </div>
+  );
+};
+// --- END AudioPlayer COMPONENT FOR FEED ---
 
 const FOLLOW_ONLY_FEED = import.meta.env.VITE_FOLLOW_ONLY_FEED === 'true';
 
@@ -447,6 +556,8 @@ export const Feed = () => {
         media_type = 'image';
       } else if (remoteUrl.match(/\.(mp4|webm|mov|avi)$/i)) {
         media_type = 'video';
+      } else if (remoteUrl.match(/\.(mp3|wav|ogg|m4a|weba)$/i)) { // Added audio types
+        media_type = 'audio';
       } else {
         media_type = 'document';
       }
@@ -490,6 +601,11 @@ export const Feed = () => {
       if (file.type.startsWith('video/')) {
         return <video src={url} className="max-h-48 rounded-lg" controls />;
       }
+      // --- MODIFIED: Use AudioPlayer for local file preview ---
+      if (file.type.startsWith('audio/')) {
+        return <AudioPlayer src={url} />;
+      }
+      // --------------------------------------------------------
       return (
         <div className="flex items-center gap-2 p-3 bg-[rgb(var(--color-surface-hover))] rounded-lg">
           <FileText size={20} className="text-[rgb(var(--color-text-secondary))]" />
@@ -504,6 +620,11 @@ export const Feed = () => {
       if (remoteUrl.match(/\.(mp4|webm|mov|avi)$/i)) {
         return <video src={remoteUrl} className="max-h-48 rounded-lg" controls />;
       }
+      // --- MODIFIED: Use AudioPlayer for remote URL preview ---
+      if (remoteUrl.match(/\.(mp3|wav|ogg|m4a|weba)$/i)) {
+        return <AudioPlayer src={remoteUrl} />;
+      }
+      // --------------------------------------------------------
       return (
         <div className="flex items-center gap-2 p-3 bg-[rgb(var(--color-surface-hover))] rounded-lg">
           <Link size={20} className="text-[rgb(var(--color-text-secondary))]" />
@@ -560,7 +681,7 @@ export const Feed = () => {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*,video/*,.pdf,.doc,.docx,.txt"
+              accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt" // Added audio/*
               onChange={(e) => {
                 setFile(e.target.files?.[0] || null);
                 setRemoteUrl('');
@@ -585,7 +706,7 @@ export const Feed = () => {
                     setRemoteUrl(e.target.value);
                     setFile(null);
                   }}
-                  placeholder="Paste image/video/file URL..."
+                  placeholder="Paste image/video/audio/file URL..." // Updated placeholder
                   className="flex-1 min-w-0 px-3 py-1.5 text-sm border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] rounded-full focus:outline-none focus:border-[rgb(var(--color-accent))] text-[rgb(var(--color-text))]"
                 />
               </div>
@@ -683,6 +804,13 @@ export const Feed = () => {
                         Your browser does not support the video tag.
                       </video>
                     )}
+                    {/* NEW: Custom Audio Player for Posts */}
+                    {post.media_type === 'audio' && (
+                        <div className="rounded-2xl w-full">
+                            <AudioPlayer src={post.media_url} />
+                        </div>
+                    )}
+                    {/* END NEW */}
                     {post.media_type === 'document' && (
                       <a
                         href={post.media_url}
