@@ -2,7 +2,7 @@
 easy-to-host social platforms for everyone
 
 ```
-Current version: 1.0.7D
+Current version: 1.0.7E
 ```
 
 ### What makes LiaoTian (LT) so special from already existing social media/networking platforms?
@@ -31,7 +31,7 @@ If you just want to create an account on **Liaoverse** (our official deployment)
 - [x] Post on the feed and customize profiles like X/Twitter
 - [x] Messaging like Telegram/WhatsApp
 - [x] User following/followers
-- [x] User profiles via url parameters (e.g. [lt.mux8.com/?liaotian](https://lt.mux8.com/?liaotian))
+- [x] User profiles via url parameters (e.g. [/?liaotian](https://liaoverse.xyz/?liaotian))
 - [x] Animated GIFs eligible for profile customization
 - [x] Upload files (max 10 MB)
 - [x] Upload images, videos, documents (txt, pdf, doc/x)
@@ -46,6 +46,9 @@ If you just want to create an account on **Liaoverse** (our official deployment)
 - [x] Comments and replies on posts (in a comment modal)
 - [x] Multiple tabs on Profile for posts, media, and likes. Media tab is in a classic *Instagram*-like grid.
 - [x] Multiple tabs on Feed for posts and shots ("shorts/"reels") in *TikTok*-like swipe navigation UI.
+- [x] Platform data statistics page (accessible on [/stats](https://liaoverse.xyz/stats))
+- [x] Voice messages
+- [x] Web visitor analytics via Vercel
 - [ ] Embed links
 - [ ] Create and manage groups
 - [ ] Posting long-form content, e.g. blogs
@@ -53,7 +56,6 @@ If you just want to create an account on **Liaoverse** (our official deployment)
 - [ ] Hashtags
 - [ ] Custom sounds, e.g. notifications, clicks, etc.
 - [ ] Reactions for messages
-- [ ] Voice messages
 - [ ] Gaming mode (color-changing RGB background)
 - [ ] Sending GIFs via Tenor/Giphy
 - [ ] Privacy settings for posts + "emergency profile shutdown" option to temporarily make only posts have "only me" level privacy.
