@@ -51,6 +51,7 @@ If you just want to create an account on **Liaoverse** (our official deployment)
 - [x] Web visitor analytics via Vercel
 - [x] Posting on Status (similar to FB/IG story) + view detecting and replying via Messages logic
 - [x] Status archive
+- [x] custom SVG loading animations
 - [x] Notification system (with "clear all" button to easily clear from database, too)
 - [x] Message read receipts (checkmarks)
 - [ ] Embed links
