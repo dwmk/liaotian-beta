@@ -456,7 +456,7 @@ if (loading) {
               fill="rgb(var(--color-primary))"
             />
           </svg>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <button
               onClick={() => setShowSearch(true)}
               className="p-3 rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition"
@@ -474,7 +474,7 @@ if (loading) {
                 view === 'feed' ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))]'
               }`}
             >
-              <Home size={20} />
+              <Home size={20} className="text-[rgb(var(--color-text-secondary))]" />
             </button>
             
             {/* === UPDATED: Messages Icon === */}
@@ -488,7 +488,7 @@ if (loading) {
                 view === 'messages' ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))]'
               }`}
             >
-              <MessageSquare size={20} />
+              <MessageSquare size={20} className="text-[rgb(var(--color-text-secondary))]" />
               {unreadMessages > 0 && ( // Added dot
                 <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full" />
               )}
@@ -517,7 +517,7 @@ if (loading) {
                   : 'hover:bg-[rgb(var(--color-surface-hover))]'
               }`}
             >
-              <User size={20} />
+              <User size={20} className="text-[rgb(var(--color-text-secondary))]" />
             </button>
             <button
               onClick={signOut}
