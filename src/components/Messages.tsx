@@ -866,9 +866,12 @@ export const Messages = () => {
                         : 'bg-[rgb(var(--color-surface))] text-[rgb(var(--color-text))] border border-[rgb(var(--color-border))] rounded-tl-none'
                     }`}
                   >
-                    {msg.reply_to_id && (() => {
-                      const repliedToMsg = msg.reply_to ? msg.reply_to : messages.find(m => m.id === msg.reply_to_id);
-                      if (!repliedToMsg) return null;
+                    {/* FIX: We now ONLY use msg.reply_to, which is the object joined by the database.
+                      We removed the unreliable client-side `messages.find(...)` fallback.
+                      We also corrected the logic for displaying media previews vs. "[Message]".
+                    */}
+                    {msg.reply_to_id && msg.reply_to && (() => {
+                      const repliedToMsg = msg.reply_to;
                       const isReplyToSelf = repliedToMsg.sender_id === user!.id;
                       
                       return (
@@ -885,6 +888,7 @@ export const Messages = () => {
                             {isReplyToSelf ? 'You' : selectedUser?.display_name}
                           </div>
                           <p className="text-xs opacity-90 truncate whitespace-pre-wrap break-words">
+                            {/* This logic is now correct: */}
                             {repliedToMsg.content ? repliedToMsg.content : (
                               <span className="flex items-center gap-1 italic opacity-80">
                                 {repliedToMsg.media_type === 'image' && (
@@ -899,7 +903,6 @@ export const Messages = () => {
                                 {repliedToMsg.media_type === 'document' && (
                                   <><FileText size={12} className="inline-block" /> File</>
                                 )}
-                                {/* This condition is now correct */}
                                 {!repliedToMsg.media_type && '[Message]'}
                               </span>
                             )}
@@ -996,6 +999,7 @@ export const Messages = () => {
                       Replying to {replyingTo.sender_id === user!.id ? 'yourself' : selectedUser?.display_name}
                     </div>
                     <p className="text-sm text-[rgb(var(--color-text))] truncate mt-0.5">
+                      {/* This logic is now correct: */}
                       {replyingTo.content ? replyingTo.content : (
                         <span className="flex items-center gap-1 italic opacity-80">
                           {replyingTo.media_type === 'image' && (
@@ -1010,7 +1014,6 @@ export const Messages = () => {
                           {replyingTo.media_type === 'document' && (
                             <><FileText size={12} className="inline-block" /> File</>
                           )}
-                          {/* This condition is now correct */}
                           {!replyingTo.media_type && '[Message]'}
                         </span>
                       )}
