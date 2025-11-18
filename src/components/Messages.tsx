@@ -759,7 +759,7 @@ export const Messages = ({
         <Calls />
         
         {/* Mobile Tab Switcher - Fixed Position for Visibility */}
-        <div className="md:hidden flex-shrink-0 p-2 bg-[rgb(var(--color-surface))] border-b border-[rgb(var(--color-border))] flex gap-2 z-50">
+        <div className="md:hidden flex-shrink-0 px-2 pt-12 pb-2 bg-[rgb(var(--color-surface))] border-b border-[rgb(var(--color-border))] flex gap-2 z-50 sticky top-0">
           <button 
             onClick={() => setActiveTab('chats')} 
             className="flex-1 p-2 rounded font-bold text-sm bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]"
