@@ -1,11 +1,12 @@
 // src/components/Gazebos.tsx
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase, Profile, Gazebo, GazeboChannel, GazeboMessage, uploadMedia } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Hash, Volume2, Plus, Settings, Users, X, Send, Paperclip, Mic, Link as LinkIcon,
-  Trash2, Edit3, Check, Copy, Crown, Shield, ChevronDown, Menu, Search, 
-  FileText, LogOut, Image as ImageIcon, Video as VideoIcon, MoreVertical, Play, Pause
+  Trash2, Edit3, Check, Copy, Crown, Shield, ChevronDown, Menu,
+  FileText, LogOut, Image as ImageIcon, MoreVertical, Play, Pause,
+  PhoneOff, MessageSquare, UserMinus, ShieldAlert, AlertCircle
 } from 'lucide-react';
 
 // --- Types ---
@@ -17,8 +18,6 @@ type GazebosProps = {
 type MemberWithProfile = {
   user_id: string;
   role: 'owner' | 'admin' | 'member';
-  role_name: string;
-  role_color: string;
   profiles: Profile;
 };
 
@@ -30,7 +29,7 @@ type InviteLink = {
   uses_count: number;
 };
 
-// --- AudioPlayer Helper (Matches Messages.tsx) ---
+// --- AudioPlayer Helper ---
 const AudioPlayer = ({ src, isOutgoing }: { src: string, isOutgoing: boolean }) => {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -80,6 +79,18 @@ const AudioPlayer = ({ src, isOutgoing }: { src: string, isOutgoing: boolean }) 
     );
 };
 
+// --- Utility: Date Formatting ---
+const formatDateHeader = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(now.getDate() - 1);
+
+    if (date.toDateString() === now.toDateString()) return "Today";
+    if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+    return date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+};
+
 // --- Main Component ---
 export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) => {
   const { user } = useAuth();
@@ -96,11 +107,18 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
   // UI State
   const [mobileView, setMobileView] = useState<'servers' | 'channels' | 'chat'>('servers');
   const [showMembersPanel, setShowMembersPanel] = useState(true);
+  const [voiceConnected, setVoiceConnected] = useState<{channelId: string, name: string} | null>(null);
+  
+  // Modal/Overlay States
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showCreateGazeboModal, setShowCreateGazeboModal] = useState(false);
   const [showCreateChannelModal, setShowCreateChannelModal] = useState(false);
-  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [viewingProfile, setViewingProfile] = useState<Profile | null>(null);
+  
+  // Editing States
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editMessageContent, setEditMessageContent] = useState('');
 
   // Message Input State
   const [content, setContent] = useState('');
@@ -120,10 +138,11 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
 
   // Derived State
   const isOwner = activeGazebo?.owner_id === user?.id;
-  const memberRole = members.find(m => m.user_id === user?.id)?.role || 'member';
+  const currentUserMember = members.find(m => m.user_id === user?.id);
+  const memberRole = currentUserMember?.role || 'member';
   const isAdmin = isOwner || memberRole === 'admin';
 
-  // --- Initialization & Navigation ---
+  // --- Initialization ---
 
   useEffect(() => {
     if (!user) return;
@@ -139,7 +158,6 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
                if (onInviteHandled) onInviteHandled();
            });
         } else if (list.length > 0 && !activeGazebo) {
-            // Don't auto-select on mobile to allow list view
             if (window.innerWidth > 768) setActiveGazebo(list[0]);
         }
       }
@@ -147,31 +165,45 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
     fetchGazebos();
   }, [user, initialInviteCode]);
 
+  // --- Active Gazebo Data & Realtime Subs ---
   useEffect(() => {
     if (!activeGazebo) { setChannels([]); setMembers([]); setActiveChannel(null); return; }
     
-    const loadDetails = async () => {
-        // Channels
+    const loadData = async () => {
+        // Load Channels
         const { data: cData } = await supabase.from('gazebo_channels').select('*').eq('gazebo_id', activeGazebo.id).order('created_at');
         setChannels(cData || []);
-        // Auto-select first text channel if on desktop
+        
+        // Select default channel
         if (window.innerWidth > 768 && !activeChannel) {
             setActiveChannel(cData?.find(c => c.type === 'text') || null);
         }
 
-        // Members
+        // Load Members
         const { data: mData } = await supabase.from('gazebo_members').select('user_id, role, profiles(*)').eq('gazebo_id', activeGazebo.id);
         const mList: MemberWithProfile[] = (mData || []).map(m => ({
-            user_id: m.user_id, role: m.role as any,
-            role_name: m.role === 'owner' ? 'Owner' : m.role === 'admin' ? 'Admin' : 'Member',
-            role_color: m.role === 'owner' ? '#eab308' : m.role === 'admin' ? '#3b82f6' : '#94a3b8',
+            user_id: m.user_id, 
+            role: m.role as any,
             profiles: m.profiles as Profile
         }));
         setMembers(mList);
     };
-    loadDetails();
-  }, [activeGazebo]);
+    loadData();
 
+    // REALTIME SUBSCRIPTIONS FOR GAZEBO STATE
+    const channelSub = supabase.channel(`gazebo_updates:${activeGazebo.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'gazebo_channels', filter: `gazebo_id=eq.${activeGazebo.id}` }, 
+            () => loadData() // Refresh lists on channel changes
+        )
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'gazebo_members', filter: `gazebo_id=eq.${activeGazebo.id}` }, 
+            () => loadData() // Refresh lists on member changes (joins/leaves/role updates)
+        )
+        .subscribe();
+
+    return () => { supabase.removeChannel(channelSub); };
+  }, [activeGazebo?.id]);
+
+  // --- Chat Messages & Subs ---
   useEffect(() => {
       if (!activeChannel || activeChannel.type !== 'text') { setMessages([]); return; }
       
@@ -189,12 +221,19 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
                 setMessages(prev => [...prev, { ...newMsg, sender: data as Profile }]);
                 setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
             });
-        }).subscribe();
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'gazebo_messages', filter: `channel_id=eq.${activeChannel.id}` }, payload => {
+            setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, content: payload.new.content } : m));
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'gazebo_messages', filter: `channel_id=eq.${activeChannel.id}` }, payload => {
+            setMessages(prev => prev.filter(m => m.id !== payload.old.id));
+        })
+        .subscribe();
 
       return () => { supabase.removeChannel(sub); };
-  }, [activeChannel]);
+  }, [activeChannel?.id]);
 
-  // --- Actions ---
+  // --- Core Actions ---
 
   const handleInviteJoin = async (code: string) => {
       if (!user) return null;
@@ -202,21 +241,23 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
       if (!inv) return null;
       
       const g = inv.gazebos as Gazebo;
-      const { error } = await supabase.from('gazebo_members').insert({ gazebo_id: g.id, user_id: user.id, role: 'member' });
-      if (!error) {
-          await supabase.from('gazebo_invites').update({ uses_count: inv.uses_count + 1 }).eq('id', inv.id);
-          setGazebos(prev => [...prev, g]);
-          return g;
-      } else {
-          // Likely already a member
-          const existing = gazebos.find(gaz => gaz.id === g.id);
-          return existing || g;
+      // Check if already member
+      const { count } = await supabase.from('gazebo_members').select('*', {count: 'exact', head: true}).eq('gazebo_id', g.id).eq('user_id', user.id);
+      
+      if (!count) {
+          const { error } = await supabase.from('gazebo_members').insert({ gazebo_id: g.id, user_id: user.id, role: 'member' });
+          if (!error) {
+              await supabase.from('gazebo_invites').update({ uses_count: inv.uses_count + 1 }).eq('id', inv.id);
+              setGazebos(prev => [...prev, g]);
+              return g;
+          }
       }
+      return g; // Return existing or new
   };
 
   const createGazebo = async (name: string) => {
       if (!name.trim() || !user) return;
-      const { data: g, error } = await supabase.from('gazebos').insert({
+      const { data: g } = await supabase.from('gazebos').insert({
           name: name.trim(), type: 'group', owner_id: user.id,
           icon_url: `https://ui-avatars.com/api/?name=${name}&background=random`
       }).select().single();
@@ -248,43 +289,22 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
       setMobileView('servers');
   };
 
-  const manageChannel = async (action: 'create' | 'update' | 'delete', payload?: any) => {
-      if (!activeGazebo || !isAdmin) return;
-      if (action === 'create') {
-          const { data } = await supabase.from('gazebo_channels').insert({ gazebo_id: activeGazebo.id, name: payload.name, type: payload.type }).select().single();
-          if (data) setChannels(prev => [...prev, data]);
-          setShowCreateChannelModal(false);
-      }
-      if (action === 'update' && editingChannelId) {
-          const { data } = await supabase.from('gazebo_channels').update({ name: payload }).eq('id', editingChannelId).select().single();
-          if (data) setChannels(prev => prev.map(c => c.id === data.id ? data : c));
-          setEditingChannelId(null);
-      }
-      if (action === 'delete' && payload) {
-          if (!confirm('Delete channel?')) return;
-          await supabase.from('gazebo_channels').delete().eq('id', payload);
-          setChannels(prev => prev.filter(c => c.id !== payload));
-          if (activeChannel?.id === payload) setActiveChannel(null);
-      }
+  // --- Member Moderation ---
+
+  const updateMemberRole = async (targetUserId: string, newRole: 'admin' | 'member') => {
+      if (!activeGazebo || !isOwner) return;
+      await supabase.from('gazebo_members').update({ role: newRole }).eq('gazebo_id', activeGazebo.id).eq('user_id', targetUserId);
+      // Realtime sub will update UI
   };
 
-  const manageInvite = async (action: 'create' | 'delete', codeOrId?: string) => {
-      if (!activeGazebo || !isAdmin) return;
-      if (action === 'create') {
-          const code = codeOrId || Math.random().toString(36).substring(2, 10);
-          const { data, error } = await supabase.from('gazebo_invites').insert({
-              gazebo_id: activeGazebo.id, invite_code: code, created_by_user_id: user!.id
-          }).select().single();
-          if (data) setInviteLinks(prev => [data, ...prev]);
-          else alert('Error creating invite. Code might exist.');
-      }
-      if (action === 'delete' && codeOrId) {
-          await supabase.from('gazebo_invites').delete().eq('id', codeOrId);
-          setInviteLinks(prev => prev.filter(i => i.id !== codeOrId));
-      }
+  const kickMember = async (targetUserId: string) => {
+      if (!activeGazebo || !isAdmin || !confirm("Kick this user?")) return;
+      await supabase.from('gazebo_members').delete().eq('gazebo_id', activeGazebo.id).eq('user_id', targetUserId);
+      // Realtime sub will update UI
   };
 
-  // --- Message Logic (Copied from Messages.tsx) ---
+  // --- Message Actions ---
+
   const handleSend = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!activeChannel || !user || isUploading || (!content.trim() && !file && !remoteUrl)) return;
@@ -314,6 +334,19 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
       setContent(''); setFile(null); setRemoteUrl(''); setIsUploading(false); setMediaInputMode(null);
   };
 
+  const deleteMessage = async (id: string) => {
+      if(!confirm("Delete message?")) return;
+      await supabase.from('gazebo_messages').delete().eq('id', id);
+  };
+
+  const updateMessage = async () => {
+      if(!editingMessageId || !editMessageContent.trim()) return;
+      await supabase.from('gazebo_messages').update({ content: editMessageContent }).eq('id', editingMessageId);
+      setEditingMessageId(null);
+      setEditMessageContent('');
+  };
+
+  // --- Audio Recording ---
   const startRecording = () => {
       navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
           const recorder = new MediaRecorder(stream);
@@ -332,7 +365,39 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
   };
   const stopRecording = () => mediaRecorderRef.current?.stop();
 
-  // --- Render Helpers ---
+  // --- Helper: Manage Channels & Invites ---
+  const manageChannel = async (action: 'create' | 'update' | 'delete', payload?: any) => {
+      if (!activeGazebo || !isAdmin) return;
+      if (action === 'create') {
+          const { data } = await supabase.from('gazebo_channels').insert({ gazebo_id: activeGazebo.id, name: payload.name, type: payload.type }).select().single();
+          setShowCreateChannelModal(false);
+      }
+      if (action === 'update' && editingChannelId) {
+          await supabase.from('gazebo_channels').update({ name: payload }).eq('id', editingChannelId);
+          setEditingChannelId(null);
+      }
+      if (action === 'delete' && payload) {
+          if (!confirm('Delete channel?')) return;
+          await supabase.from('gazebo_channels').delete().eq('id', payload);
+          if (activeChannel?.id === payload) setActiveChannel(null);
+      }
+  };
+
+  const manageInvite = async (action: 'create' | 'delete', codeOrId?: string) => {
+      if (!activeGazebo || !isAdmin) return;
+      if (action === 'create') {
+          const code = codeOrId || Math.random().toString(36).substring(2, 10);
+          const { data } = await supabase.from('gazebo_invites').insert({
+              gazebo_id: activeGazebo.id, invite_code: code, created_by_user_id: user!.id
+          }).select().single();
+          if (data) setInviteLinks(prev => [data, ...prev]);
+      }
+      if (action === 'delete' && codeOrId) {
+          await supabase.from('gazebo_invites').delete().eq('id', codeOrId);
+          setInviteLinks(prev => prev.filter(i => i.id !== codeOrId));
+      }
+  };
+
   const getPreview = () => {
       if (!file && !remoteUrl) return null;
       const src = file ? URL.createObjectURL(file) : remoteUrl;
@@ -340,102 +405,14 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
       return <div className="bg-[rgb(var(--color-surface-hover))] p-2 rounded text-sm flex items-center gap-2"><FileText size={16} /> Attached Media</div>;
   };
 
-  // --- Modals ---
-  const CreateGazeboModal = () => (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-[rgb(var(--color-surface))] p-6 rounded-lg w-96 shadow-xl border border-[rgb(var(--color-border))]">
-              <h3 className="text-xl font-bold mb-4">Create a Gazebo</h3>
-              <input id="newGazeboName" type="text" placeholder="Server Name" className="w-full p-2 bg-[rgb(var(--color-background))] border border-[rgb(var(--color-border))] rounded mb-4 text-[rgb(var(--color-text))]" />
-              <div className="flex justify-end gap-2">
-                  <button onClick={() => setShowCreateGazeboModal(false)} className="px-4 py-2 text-[rgb(var(--color-text-secondary))]">Cancel</button>
-                  <button onClick={() => createGazebo((document.getElementById('newGazeboName') as HTMLInputElement).value)} className="px-4 py-2 bg-[rgb(var(--color-primary))] text-white rounded">Create</button>
-              </div>
-          </div>
-      </div>
-  );
-
-  const CreateChannelModal = () => {
-      const [name, setName] = useState('');
-      const [type, setType] = useState<'text'|'voice'>('text');
-      return (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-[rgb(var(--color-surface))] p-6 rounded-lg w-96 shadow-xl border border-[rgb(var(--color-border))]">
-                  <h3 className="text-xl font-bold mb-4">Create Channel</h3>
-                  <input value={name} onChange={e => setName(e.target.value.toLowerCase().replace(/\s/g, '-'))} placeholder="channel-name" className="w-full p-2 bg-[rgb(var(--color-background))] border border-[rgb(var(--color-border))] rounded mb-4 text-[rgb(var(--color-text))]" />
-                  <div className="flex gap-4 mb-4">
-                      <label className="flex items-center gap-2 cursor-pointer"><input type="radio" checked={type==='text'} onChange={()=>setType('text')} /> <Hash size={16}/> Text</label>
-                      <label className="flex items-center gap-2 cursor-pointer"><input type="radio" checked={type==='voice'} onChange={()=>setType('voice')} /> <Volume2 size={16}/> Voice</label>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                      <button onClick={() => setShowCreateChannelModal(false)} className="px-4 py-2 text-[rgb(var(--color-text-secondary))]">Cancel</button>
-                      <button onClick={() => manageChannel('create', { name, type })} className="px-4 py-2 bg-[rgb(var(--color-primary))] text-white rounded">Create</button>
-                  </div>
-              </div>
-          </div>
-      );
-  };
-
-  const SettingsModal = () => (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-[rgb(var(--color-surface))] p-6 rounded-lg w-full max-w-md shadow-xl border border-[rgb(var(--color-border))] max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between mb-6">
-                  <h2 className="text-2xl font-bold">Server Settings</h2>
-                  <button onClick={() => setShowSettingsModal(false)}><X /></button>
-              </div>
-              
-              <div className="space-y-6">
-                  <section>
-                      <h3 className="font-bold mb-2 uppercase text-xs text-[rgb(var(--color-text-secondary))]">Overview</h3>
-                      <div className="flex gap-4 items-center mb-4">
-                          <img src={activeGazebo?.icon_url} className="w-20 h-20 rounded-full object-cover" />
-                          <button className="text-sm bg-[rgb(var(--color-surface-hover))] px-3 py-1 rounded">Change Icon</button>
-                      </div>
-                      <input type="text" defaultValue={activeGazebo?.name} onBlur={(e) => updateGazebo({ name: e.target.value })} className="w-full p-2 bg-[rgb(var(--color-background))] border border-[rgb(var(--color-border))] rounded" />
-                  </section>
-
-                  <section>
-                      <h3 className="font-bold mb-2 uppercase text-xs text-[rgb(var(--color-text-secondary))]">Invites</h3>
-                      <div className="flex gap-2 mb-2">
-                          <input id="customCode" placeholder="Custom Code" className="flex-1 p-2 bg-[rgb(var(--color-background))] rounded border border-[rgb(var(--color-border))]" />
-                          <button onClick={() => manageInvite('create', (document.getElementById('customCode') as HTMLInputElement).value)} className="bg-[rgb(var(--color-primary))] text-white px-3 rounded">Create</button>
-                      </div>
-                      <div className="space-y-2 max-h-40 overflow-y-auto">
-                          {inviteLinks.map(i => (
-                              <div key={i.id} className="flex justify-between items-center bg-[rgb(var(--color-surface-hover))] p-2 rounded text-sm">
-                                  <span className="font-mono truncate">{i.invite_code}</span>
-                                  <div className="flex gap-2">
-                                      <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/invite/${i.invite_code}`); alert('Copied!'); }}><Copy size={14}/></button>
-                                      <button onClick={() => manageInvite('delete', i.id)} className="text-red-500"><Trash2 size={14}/></button>
-                                  </div>
-                              </div>
-                          ))}
-                          <button onClick={async () => { const { data } = await supabase.from('gazebo_invites').select('*').eq('gazebo_id', activeGazebo!.id); setInviteLinks(data || []); }} className="text-xs underline text-[rgb(var(--color-text-secondary))]">Load Invites</button>
-                      </div>
-                  </section>
-
-                  {isOwner && (
-                      <section className="pt-4 border-t border-[rgb(var(--color-border))]">
-                          <button onClick={deleteGazebo} className="flex items-center gap-2 text-red-500 hover:bg-red-500/10 w-full p-2 rounded transition">
-                              <Trash2 size={18} /> Delete Server
-                          </button>
-                      </section>
-                  )}
-              </div>
-          </div>
-      </div>
-  );
-
-  // --- Conditional Rendering for Mobile/Desktop ---
-
-  // If mobile, we only show one column at a time. 
-  // Desktop shows all columns.
   const isMobile = window.innerWidth <= 768;
 
+  // --- RENDER START ---
   return (
     <div className="flex h-full w-full bg-[rgb(var(--color-background))] overflow-hidden text-[rgb(var(--color-text))]">
       
-      {/* COLUMN 1: Server List (Always visible on Desktop, visible on Mobile if view='servers') */}
-      <div className={`flex-shrink-0 w-18 bg-[rgb(var(--color-surface))] border-r border-[rgb(var(--color-border))] flex flex-col items-center py-3 space-y-2 z-30 ${isMobile && mobileView !== 'servers' ? 'hidden' : 'flex'} w-20`}>
+      {/* === 1. SERVER LIST === */}
+      <div className={`flex-shrink-0 bg-[rgb(var(--color-surface))] border-r border-[rgb(var(--color-border))] flex flex-col items-center py-3 space-y-2 z-30 ${isMobile && mobileView !== 'servers' ? 'hidden' : 'flex'} w-18 md:w-20`}>
          {gazebos.map(g => (
              <button key={g.id} onClick={() => { setActiveGazebo(g); setMobileView('channels'); }} className={`group relative w-12 h-12 flex items-center justify-center rounded-3xl hover:rounded-xl transition-all duration-300 overflow-hidden ${activeGazebo?.id === g.id ? 'rounded-xl bg-[rgb(var(--color-primary))]' : 'bg-[rgb(var(--color-surface-hover))]'}`}>
                  {g.icon_url ? <img src={g.icon_url} className="w-full h-full object-cover" /> : <span className="font-bold text-lg">{g.name.substring(0,2).toUpperCase()}</span>}
@@ -447,17 +424,19 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
          </button>
       </div>
 
-      {/* COLUMN 2: Channels (Visible if activeGazebo selected. On mobile, view='channels') */}
+      {/* === 2. CHANNEL SIDEBAR === */}
       <div className={`flex-shrink-0 w-60 bg-[rgb(var(--color-surface))] flex flex-col border-r border-[rgb(var(--color-border))] ${isMobile && mobileView !== 'channels' ? 'hidden' : 'flex'} ${!activeGazebo ? 'hidden' : ''}`}>
-          {/* Header */}
-          <div className="h-12 border-b border-[rgb(var(--color-border))] flex items-center justify-between px-4 font-bold shadow-sm hover:bg-[rgb(var(--color-surface-hover))] cursor-pointer transition" onClick={() => isAdmin && setShowSettingsModal(true)}>
+          {/* Server Header */}
+          <div className="h-12 border-b border-[rgb(var(--color-border))] flex items-center justify-between px-4 font-bold shadow-sm hover:bg-[rgb(var(--color-surface-hover))] cursor-pointer transition relative" onClick={() => isAdmin && setShowSettingsModal(true)}>
               <span className="truncate">{activeGazebo?.name}</span>
               {isAdmin && <ChevronDown size={16} />}
           </div>
-          {/* List */}
+          
+          {/* Channel List */}
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
               {isMobile && <button onClick={() => setMobileView('servers')} className="flex items-center gap-2 text-sm text-[rgb(var(--color-text-secondary))] mb-4 px-2"><ChevronDown className="rotate-90" size={14}/> Back to Servers</button>}
               
+              {/* Text Channels */}
               <div className="flex items-center justify-between px-2 pt-4 pb-1 text-xs font-bold text-[rgb(var(--color-text-secondary))] hover:text-[rgb(var(--color-text))] group">
                   <span>TEXT CHANNELS</span>
                   {isAdmin && <button onClick={() => setShowCreateChannelModal(true)}><Plus size={14} /></button>}
@@ -471,7 +450,7 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
                               : <span>{c.name}</span>
                           }
                       </div>
-                      {isAdmin && activeChannel?.id === c.id && (
+                      {isAdmin && (
                           <div className="hidden group-hover:flex gap-1">
                               <Settings size={14} onClick={() => setEditingChannelId(c.id)} />
                               <Trash2 size={14} onClick={() => manageChannel('delete', c.id)} className="text-red-500" />
@@ -480,20 +459,40 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
                   </div>
               ))}
 
+              {/* Voice Channels */}
               <div className="flex items-center justify-between px-2 pt-4 pb-1 text-xs font-bold text-[rgb(var(--color-text-secondary))] group">
                   <span>VOICE CHANNELS</span>
                   {isAdmin && <button onClick={() => setShowCreateChannelModal(true)}><Plus size={14} /></button>}
               </div>
               {channels.filter(c => c.type === 'voice').map(c => (
-                   <div key={c.id} className="flex items-center gap-2 px-2 py-1 rounded text-[rgb(var(--color-text-secondary))] hover:bg-[rgb(var(--color-surface-hover))] hover:text-[rgb(var(--color-text))] cursor-pointer">
+                   <div key={c.id} 
+                        className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer ${voiceConnected?.channelId === c.id ? 'bg-[rgb(var(--color-surface-hover))] text-green-500' : 'text-[rgb(var(--color-text-secondary))] hover:bg-[rgb(var(--color-surface-hover))]'}`}
+                        onClick={() => setVoiceConnected({channelId: c.id, name: c.name})}
+                   >
                        <Volume2 size={18} />
                        <span>{c.name}</span>
                    </div>
               ))}
           </div>
+
+          {/* Voice Status Bar */}
+          {voiceConnected && (
+              <div className="border-t border-[rgb(var(--color-border))] bg-[rgba(var(--color-surface-hover),0.5)] p-2">
+                  <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                          <span className="text-green-500 text-xs font-bold">Voice Connected</span>
+                          <span className="text-xs text-[rgb(var(--color-text-secondary))]">{voiceConnected.name} / {activeGazebo?.name}</span>
+                      </div>
+                      <button onClick={() => setVoiceConnected(null)} className="p-2 hover:bg-[rgb(var(--color-surface))] rounded-full">
+                          <PhoneOff size={16} />
+                      </button>
+                  </div>
+              </div>
+          )}
+
           {/* User Mini Bar */}
-          <div className="p-2 bg-[rgb(var(--color-surface-hover))] flex items-center gap-2">
-               <img src={user?.user_metadata.avatar_url} className="w-8 h-8 rounded-full bg-gray-500" />
+          <div className="p-2 bg-[rgb(var(--color-surface-hover))] flex items-center gap-2 border-t border-[rgb(var(--color-border))]">
+               <img src={user?.user_metadata.avatar_url} className="w-8 h-8 rounded-full bg-gray-500 cursor-pointer" onClick={() => { if(user) setViewingProfile(members.find(m=>m.user_id===user.id)?.profiles || null)}} />
                <div className="flex-1 min-w-0">
                    <div className="text-sm font-bold truncate">{user?.user_metadata.display_name || 'User'}</div>
                    <div className="text-xs text-[rgb(var(--color-text-secondary))] truncate">#{user?.email?.split('@')[0]}</div>
@@ -502,7 +501,7 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
           </div>
       </div>
 
-      {/* COLUMN 3: Chat Area (Visible if activeChannel. On mobile, view='chat') */}
+      {/* === 3. CHAT AREA === */}
       <div className={`flex-1 flex flex-col min-w-0 bg-[rgb(var(--color-background))] ${isMobile && mobileView !== 'chat' ? 'hidden' : 'flex'}`}>
           {!activeChannel ? (
               <div className="flex-1 flex items-center justify-center text-[rgb(var(--color-text-secondary))] flex-col p-8 text-center">
@@ -512,8 +511,8 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
               </div>
           ) : (
               <>
-                  {/* Chat Header */}
-                  <div className="h-12 border-b border-[rgb(var(--color-border))] flex items-center justify-between px-4 shadow-sm bg-[rgb(var(--color-surface))]">
+                  {/* Header */}
+                  <div className="h-12 border-b border-[rgb(var(--color-border))] flex items-center justify-between px-4 shadow-sm bg-[rgb(var(--color-surface))] z-10">
                       <div className="flex items-center gap-2">
                           {isMobile && <button onClick={() => setMobileView('channels')}><Menu size={24} /></button>}
                           <Hash size={24} className="text-[rgb(var(--color-text-secondary))]" />
@@ -525,32 +524,73 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
                       </div>
                   </div>
 
-                  {/* Messages List */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {/* Messages */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
                       {messages.map((msg, i) => {
-                          const showHeader = i === 0 || messages[i-1].user_id !== msg.user_id || (new Date(msg.created_at).getTime() - new Date(messages[i-1].created_at).getTime() > 300000);
+                          const prevMsg = messages[i-1];
+                          const isNewGroup = !prevMsg || prevMsg.user_id !== msg.user_id || (new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime() > 300000);
+                          const showDateHeader = !prevMsg || new Date(msg.created_at).toDateString() !== new Date(prevMsg.created_at).toDateString();
+                          const isSelf = msg.user_id === user?.id;
+
                           return (
-                              <div key={msg.id} className={`group flex gap-4 ${!showHeader ? 'mt-0.5 py-0.5' : 'mt-4'}`}>
-                                  {showHeader ? (
-                                      <img src={msg.sender?.avatar_url} className="w-10 h-10 rounded-full cursor-pointer hover:opacity-80" />
-                                  ) : <div className="w-10" />}
-                                  <div className="flex-1 min-w-0">
-                                      {showHeader && (
-                                          <div className="flex items-center gap-2 mb-1">
-                                              <span className="font-bold hover:underline cursor-pointer">{msg.sender?.display_name}</span>
-                                              <span className="text-xs text-[rgb(var(--color-text-secondary))]">{new Date(msg.created_at).toLocaleTimeString([],{hour:'2-digit', minute:'2-digit'})}</span>
-                                          </div>
-                                      )}
-                                      <div className="text-[rgb(var(--color-text))] whitespace-pre-wrap break-words">
-                                          {msg.content}
+                              <div key={msg.id}>
+                                  {showDateHeader && (
+                                      <div className="flex items-center my-4 text-[rgb(var(--color-text-secondary))] text-xs font-bold">
+                                          <div className="h-px bg-[rgb(var(--color-border))] flex-1" />
+                                          <span className="px-2">{formatDateHeader(msg.created_at)}</span>
+                                          <div className="h-px bg-[rgb(var(--color-border))] flex-1" />
                                       </div>
-                                      {msg.media_url && (
-                                          <div className="mt-2">
-                                              {msg.media_type === 'image' && <img src={msg.media_url} className="max-h-80 rounded-lg" />}
-                                              {msg.media_type === 'video' && <video src={msg.media_url} controls className="max-h-80 rounded-lg" />}
-                                              {msg.media_type === 'audio' && <div className="bg-[rgb(var(--color-surface))] p-2 rounded w-64"><AudioPlayer src={msg.media_url} isOutgoing={false} /></div>}
-                                          </div>
-                                      )}
+                                  )}
+                                  
+                                  <div className={`group flex gap-4 px-2 py-1 rounded hover:bg-[rgb(var(--color-surface-hover))] ${isNewGroup ? 'mt-3' : ''}`}>
+                                      {isNewGroup ? (
+                                          <img 
+                                            src={msg.sender?.avatar_url} 
+                                            className="w-10 h-10 rounded-full cursor-pointer hover:opacity-80 mt-0.5" 
+                                            onClick={() => setViewingProfile(msg.sender || null)}
+                                          />
+                                      ) : <div className="w-10 text-xs text-[rgb(var(--color-text-secondary))] opacity-0 group-hover:opacity-100 text-right select-none pt-1">{new Date(msg.created_at).toLocaleTimeString([],{hour:'2-digit', minute:'2-digit'}).replace(/\s[AP]M/,'')}</div>}
+                                      
+                                      <div className="flex-1 min-w-0 relative">
+                                          {isNewGroup && (
+                                              <div className="flex items-center gap-2 mb-0.5">
+                                                  <span className="font-bold hover:underline cursor-pointer text-[rgb(var(--color-text))]" onClick={() => setViewingProfile(msg.sender || null)}>{msg.sender?.display_name}</span>
+                                                  <span className="text-xs text-[rgb(var(--color-text-secondary))]">{new Date(msg.created_at).toLocaleTimeString([],{hour:'2-digit', minute:'2-digit'})}</span>
+                                              </div>
+                                          )}
+                                          
+                                          {editingMessageId === msg.id ? (
+                                              <div className="bg-[rgb(var(--color-background))] p-2 rounded border border-[rgb(var(--color-border))]">
+                                                  <input 
+                                                    value={editMessageContent} 
+                                                    onChange={e => setEditMessageContent(e.target.value)}
+                                                    className="w-full bg-transparent outline-none"
+                                                    autoFocus
+                                                    onKeyDown={e => { if(e.key === 'Enter') updateMessage(); else if(e.key === 'Escape') setEditingMessageId(null); }}
+                                                  />
+                                                  <div className="text-xs mt-2 text-[rgb(var(--color-text-secondary))]">Enter to save • Escape to cancel</div>
+                                              </div>
+                                          ) : (
+                                              <div className="text-[rgb(var(--color-text))] whitespace-pre-wrap break-words opacity-90">
+                                                  {msg.content}
+                                                  {/* Edit/Delete Actions for Self */}
+                                                  {isSelf && (
+                                                      <div className="absolute -top-2 right-0 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded shadow-sm hidden group-hover:flex">
+                                                          <button onClick={() => { setEditingMessageId(msg.id); setEditMessageContent(msg.content); }} className="p-1.5 hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]"><Edit3 size={14} /></button>
+                                                          <button onClick={() => deleteMessage(msg.id)} className="p-1.5 hover:bg-[rgb(var(--color-surface-hover))] text-red-500"><Trash2 size={14} /></button>
+                                                      </div>
+                                                  )}
+                                              </div>
+                                          )}
+
+                                          {msg.media_url && (
+                                              <div className="mt-2">
+                                                  {msg.media_type === 'image' && <img src={msg.media_url} className="max-h-80 rounded-lg border border-[rgb(var(--color-border))]" />}
+                                                  {msg.media_type === 'video' && <video src={msg.media_url} controls className="max-h-80 rounded-lg border border-[rgb(var(--color-border))]" />}
+                                                  {msg.media_type === 'audio' && <div className="bg-[rgb(var(--color-surface))] p-2 rounded w-64 border border-[rgb(var(--color-border))]"><AudioPlayer src={msg.media_url} isOutgoing={false} /></div>}
+                                              </div>
+                                          )}
+                                      </div>
                                   </div>
                               </div>
                           )
@@ -558,15 +598,15 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
                       <div ref={messagesEndRef} />
                   </div>
 
-                  {/* Input Area */}
+                  {/* Input */}
                   <div className="p-4 pt-0">
-                      <div className="bg-[rgb(var(--color-surface-hover))] rounded-lg p-2 pr-4">
+                      <div className="bg-[rgb(var(--color-surface-hover))] rounded-lg p-2 pr-4 shadow-inner">
                           {getPreview() && <div className="mb-2 p-2 border-b border-[rgb(var(--color-border))] flex justify-between">{getPreview()} <button onClick={() => {setFile(null); setRemoteUrl('');}}><X/></button></div>}
                           <div className="flex items-center gap-2">
                              <button onClick={() => setShowMediaMenu(!showMediaMenu)} className="p-2 text-[rgb(var(--color-text-secondary))] hover:text-[rgb(var(--color-text))] rounded-full relative">
                                  <Plus size={20} className="bg-[rgb(var(--color-text-secondary))] text-[rgb(var(--color-surface))] rounded-full p-0.5" />
                                  {showMediaMenu && (
-                                     <div className="absolute bottom-10 left-0 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded shadow-lg flex flex-col p-2 w-40">
+                                     <div className="absolute bottom-10 left-0 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded shadow-lg flex flex-col p-2 w-40 z-20">
                                          <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 p-2 hover:bg-[rgb(var(--color-surface-hover))] rounded text-sm"><ImageIcon size={16}/> Upload File</button>
                                          <button onClick={() => { setMediaInputMode('url'); setShowMediaMenu(false); }} className="flex items-center gap-2 p-2 hover:bg-[rgb(var(--color-surface-hover))] rounded text-sm"><LinkIcon size={16}/> Paste URL</button>
                                      </div>
@@ -580,7 +620,7 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
                                  </div>
                              ) : (
                                  <input 
-                                    className="flex-1 bg-transparent outline-none py-2 max-h-32 overflow-y-auto" 
+                                    className="flex-1 bg-transparent outline-none py-2 max-h-32 overflow-y-auto text-[rgb(var(--color-text))]" 
                                     placeholder={`Message #${activeChannel.name}`}
                                     value={content}
                                     onChange={e => setContent(e.target.value)}
@@ -602,7 +642,7 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
           )}
       </div>
 
-      {/* COLUMN 4: Member List (Desktop only, collapsible) */}
+      {/* === 4. MEMBER LIST === */}
       {showMembersPanel && !isMobile && (
           <div className="w-60 bg-[rgb(var(--color-surface))] border-l border-[rgb(var(--color-border))] flex flex-col p-4 overflow-y-auto">
               {['owner', 'admin', 'member'].map(role => {
@@ -612,14 +652,26 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
                       <div key={role} className="mb-6">
                           <h3 className="text-xs font-bold text-[rgb(var(--color-text-secondary))] uppercase mb-2">{role === 'owner' ? 'Owner' : role === 'admin' ? 'Admins' : 'Members'} — {roleMembers.length}</h3>
                           {roleMembers.map(m => (
-                              <div key={m.user_id} className="flex items-center gap-2 p-2 rounded hover:bg-[rgb(var(--color-surface-hover))] cursor-pointer opacity-90 hover:opacity-100">
-                                  <div className="relative">
-                                      <img src={m.profiles.avatar_url} className="w-8 h-8 rounded-full" />
-                                      {/* Simple online indicator simulation based on last message could go here */}
+                              <div 
+                                key={m.user_id} 
+                                className="group flex items-center gap-2 p-2 rounded hover:bg-[rgb(var(--color-surface-hover))] cursor-pointer opacity-90 hover:opacity-100 relative"
+                              >
+                                  <div className="relative" onClick={() => setViewingProfile(m.profiles)}>
+                                      <img src={m.profiles.avatar_url} className="w-8 h-8 rounded-full object-cover" />
                                   </div>
-                                  <span className={`font-medium truncate`} style={{ color: m.role_color }}>{m.profiles.display_name}</span>
-                                  {role === 'owner' && <Crown size={14} className="text-yellow-500 ml-auto" />}
-                                  {role === 'admin' && <Shield size={14} className="text-blue-500 ml-auto" />}
+                                  <span className={`font-medium truncate flex-1`} style={{ color: role === 'owner' ? '#eab308' : role === 'admin' ? '#3b82f6' : 'inherit' }} onClick={() => setViewingProfile(m.profiles)}>{m.profiles.display_name}</span>
+                                  {role === 'owner' && <Crown size={14} className="text-yellow-500" />}
+                                  {role === 'admin' && <Shield size={14} className="text-blue-500" />}
+                                  
+                                  {/* Admin Actions Dropdown (Hover Only) */}
+                                  {isAdmin && m.user_id !== user?.id && m.role !== 'owner' && (
+                                      <div className="absolute right-2 hidden group-hover:flex bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded shadow-lg">
+                                          <button title="Kick" onClick={() => kickMember(m.user_id)} className="p-1 hover:text-red-500"><UserMinus size={14}/></button>
+                                          {isOwner && (
+                                              <button title="Toggle Admin" onClick={() => updateMemberRole(m.user_id, m.role === 'admin' ? 'member' : 'admin')} className="p-1 hover:text-blue-500"><ShieldAlert size={14}/></button>
+                                          )}
+                                      </div>
+                                  )}
                               </div>
                           ))}
                       </div>
@@ -628,11 +680,181 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled }: GazebosProps) =>
           </div>
       )}
 
-      {/* Modals */}
-      {showCreateGazeboModal && <CreateGazeboModal />}
-      {showCreateChannelModal && <CreateChannelModal />}
-      {showSettingsModal && <SettingsModal />}
+      {/* === MODALS === */}
+      
+      {/* Create Gazebo */}
+      {showCreateGazeboModal && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+              <div className="bg-[rgb(var(--color-surface))] p-6 rounded-lg w-96 shadow-xl border border-[rgb(var(--color-border))]">
+                  <h3 className="text-xl font-bold mb-4 text-center">Customize Your Server</h3>
+                  <p className="text-center text-[rgb(var(--color-text-secondary))] text-sm mb-6">Give your new server a personality with a name and an icon.</p>
+                  <div className="flex justify-center mb-4">
+                      <div className="w-20 h-20 rounded-full border-2 border-dashed border-[rgb(var(--color-border))] flex items-center justify-center">
+                          <ImageIcon className="text-[rgb(var(--color-text-secondary))]" />
+                      </div>
+                  </div>
+                  <input id="newGazeboName" type="text" placeholder="Server Name" className="w-full p-2 bg-[rgb(var(--color-background))] border border-[rgb(var(--color-border))] rounded mb-4 text-[rgb(var(--color-text))]" />
+                  <div className="flex justify-between items-center mt-6">
+                      <button onClick={() => setShowCreateGazeboModal(false)} className="text-[rgb(var(--color-text-secondary))] hover:underline">Back</button>
+                      <button onClick={() => createGazebo((document.getElementById('newGazeboName') as HTMLInputElement).value)} className="px-6 py-2 bg-[rgb(var(--color-primary))] text-white rounded font-bold">Create</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Create Channel */}
+      {showCreateChannelModal && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+              <div className="bg-[rgb(var(--color-surface))] p-6 rounded-lg w-96 shadow-xl border border-[rgb(var(--color-border))]">
+                  <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-xl font-bold">Create Channel</h3>
+                      <button onClick={() => setShowCreateChannelModal(false)}><X size={20} className="text-[rgb(var(--color-text-secondary))]"/></button>
+                  </div>
+                  <ChannelCreationForm onCancel={() => setShowCreateChannelModal(false)} onCreate={(data) => manageChannel('create', data)} />
+              </div>
+          </div>
+      )}
+
+      {/* Settings */}
+      {showSettingsModal && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+              <div className="bg-[rgb(var(--color-surface))] p-6 rounded-lg w-full max-w-md shadow-xl border border-[rgb(var(--color-border))] max-h-[90vh] overflow-y-auto">
+                  <div className="flex justify-between mb-6 border-b border-[rgb(var(--color-border))] pb-4">
+                      <h2 className="text-2xl font-bold">Server Settings</h2>
+                      <button onClick={() => setShowSettingsModal(false)}><X /></button>
+                  </div>
+                  
+                  <div className="space-y-8">
+                      <section>
+                          <h3 className="font-bold mb-2 uppercase text-xs text-[rgb(var(--color-text-secondary))]">Overview</h3>
+                          <div className="flex gap-4 items-center mb-4">
+                              <img src={activeGazebo?.icon_url} className="w-20 h-20 rounded-full object-cover border-2 border-[rgb(var(--color-border))]" />
+                              <button className="text-sm bg-[rgb(var(--color-primary))] text-white px-4 py-2 rounded font-medium">Change Icon</button>
+                          </div>
+                          <div className="space-y-2">
+                              <label className="text-xs font-bold text-[rgb(var(--color-text-secondary))] uppercase">Server Name</label>
+                              <input type="text" defaultValue={activeGazebo?.name} onBlur={(e) => updateGazebo({ name: e.target.value })} className="w-full p-2 bg-[rgb(var(--color-background))] border border-[rgb(var(--color-border))] rounded" />
+                          </div>
+                      </section>
+
+                      <section>
+                          <h3 className="font-bold mb-2 uppercase text-xs text-[rgb(var(--color-text-secondary))]">Invites</h3>
+                          <div className="flex gap-2 mb-2">
+                              <input id="customCode" placeholder="Custom Invite Code" className="flex-1 p-2 bg-[rgb(var(--color-background))] rounded border border-[rgb(var(--color-border))]" />
+                              <button onClick={() => manageInvite('create', (document.getElementById('customCode') as HTMLInputElement).value)} className="bg-[rgb(var(--color-primary))] text-white px-3 rounded">Create</button>
+                          </div>
+                          <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar p-1">
+                              {inviteLinks.map(i => (
+                                  <div key={i.id} className="flex justify-between items-center bg-[rgb(var(--color-surface-hover))] p-2 rounded text-sm border border-[rgb(var(--color-border))]">
+                                      <div className="flex flex-col">
+                                          <span className="font-mono font-bold text-[rgb(var(--color-primary))]">{i.invite_code}</span>
+                                          <span className="text-[10px] text-[rgb(var(--color-text-secondary))]">{i.uses_count} uses</span>
+                                      </div>
+                                      <div className="flex gap-2">
+                                          <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/invite/${i.invite_code}`); alert('Copied!'); }} className="p-1 hover:bg-[rgb(var(--color-background))] rounded"><Copy size={14}/></button>
+                                          <button onClick={() => manageInvite('delete', i.id)} className="text-red-500 p-1 hover:bg-[rgb(var(--color-background))] rounded"><Trash2 size={14}/></button>
+                                      </div>
+                                  </div>
+                              ))}
+                              <button onClick={async () => { const { data } = await supabase.from('gazebo_invites').select('*').eq('gazebo_id', activeGazebo!.id); setInviteLinks(data || []); }} className="text-xs underline text-[rgb(var(--color-text-secondary))] mt-2">Load Existing Invites</button>
+                          </div>
+                      </section>
+
+                      {isOwner && (
+                          <section className="pt-4 border-t border-[rgb(var(--color-border))]">
+                              <h3 className="font-bold mb-2 uppercase text-xs text-red-500">Danger Zone</h3>
+                              <button onClick={deleteGazebo} className="flex items-center justify-between gap-2 text-red-500 border border-red-500 hover:bg-red-500 hover:text-white w-full p-2 rounded transition">
+                                  <span>Delete Server</span>
+                                  <Trash2 size={18} /> 
+                              </button>
+                          </section>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* User Profile Popover */}
+      {viewingProfile && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setViewingProfile(null)}>
+              <div className="bg-[rgb(var(--color-surface))] w-80 rounded-xl shadow-2xl overflow-hidden border border-[rgb(var(--color-border))]" onClick={e => e.stopPropagation()}>
+                  <div className="h-24 bg-[rgb(var(--color-primary))] relative">
+                      {viewingProfile.banner_url && <img src={viewingProfile.banner_url} className="w-full h-full object-cover" />}
+                      <img src={viewingProfile.avatar_url} className="w-20 h-20 rounded-full border-4 border-[rgb(var(--color-surface))] absolute -bottom-10 left-4 bg-[rgb(var(--color-surface))]" />
+                  </div>
+                  <div className="pt-12 pb-4 px-4">
+                      <div className="font-bold text-xl">{viewingProfile.display_name}</div>
+                      <div className="text-[rgb(var(--color-text-secondary))] text-sm mb-4">@{viewingProfile.username}</div>
+                      
+                      <div className="border-t border-[rgb(var(--color-border))] py-2 mb-2">
+                          <h4 className="text-xs font-bold uppercase text-[rgb(var(--color-text-secondary))] mb-1">About Me</h4>
+                          <p className="text-sm">{viewingProfile.bio || "No bio set."}</p>
+                      </div>
+
+                      <div className="flex gap-2 mt-4">
+                          <button 
+                             onClick={() => {
+                                 setViewingProfile(null);
+                                 window.dispatchEvent(new CustomEvent('openDirectMessage', { detail: viewingProfile }));
+                             }}
+                             className="flex-1 bg-[rgb(var(--color-primary))] text-white py-2 rounded font-medium text-sm"
+                          >
+                             Message
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
 
     </div>
   );
+};
+
+// Sub-component for channel creation to keep main render cleaner
+const ChannelCreationForm = ({ onCancel, onCreate }: { onCancel: ()=>void, onCreate: (d:any)=>void }) => {
+    const [name, setName] = useState('');
+    const [type, setType] = useState<'text'|'voice'>('text');
+    return (
+        <>
+            <div className="space-y-4 mb-6">
+                <div>
+                    <label className="block text-xs font-bold uppercase text-[rgb(var(--color-text-secondary))] mb-2">Channel Type</label>
+                    <div className="space-y-2">
+                        <div onClick={()=>setType('text')} className={`flex items-center p-3 rounded cursor-pointer border ${type==='text' ? 'bg-[rgb(var(--color-surface-hover))] border-[rgb(var(--color-primary))]' : 'border-[rgb(var(--color-border))] hover:bg-[rgb(var(--color-surface-hover))]'}`}>
+                            <Hash className="mr-3 text-[rgb(var(--color-text-secondary))]" size={24}/>
+                            <div>
+                                <div className="font-bold">Text</div>
+                                <div className="text-xs text-[rgb(var(--color-text-secondary))]">Send messages, images, and opinions.</div>
+                            </div>
+                            <div className={`ml-auto w-4 h-4 rounded-full border flex items-center justify-center ${type==='text' ? 'border-[rgb(var(--color-primary))]' : 'border-[rgb(var(--color-text-secondary))]'}`}>
+                                {type==='text' && <div className="w-2 h-2 bg-[rgb(var(--color-primary))] rounded-full" />}
+                            </div>
+                        </div>
+                        <div onClick={()=>setType('voice')} className={`flex items-center p-3 rounded cursor-pointer border ${type==='voice' ? 'bg-[rgb(var(--color-surface-hover))] border-[rgb(var(--color-primary))]' : 'border-[rgb(var(--color-border))] hover:bg-[rgb(var(--color-surface-hover))]'}`}>
+                            <Volume2 className="mr-3 text-[rgb(var(--color-text-secondary))]" size={24}/>
+                            <div>
+                                <div className="font-bold">Voice</div>
+                                <div className="text-xs text-[rgb(var(--color-text-secondary))]">Hang out together with voice and video.</div>
+                            </div>
+                            <div className={`ml-auto w-4 h-4 rounded-full border flex items-center justify-center ${type==='voice' ? 'border-[rgb(var(--color-primary))]' : 'border-[rgb(var(--color-text-secondary))]'}`}>
+                                {type==='voice' && <div className="w-2 h-2 bg-[rgb(var(--color-primary))] rounded-full" />}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold uppercase text-[rgb(var(--color-text-secondary))] mb-2">Channel Name</label>
+                    <div className="flex items-center bg-[rgb(var(--color-background))] border border-[rgb(var(--color-border))] rounded px-2">
+                        <span className="text-[rgb(var(--color-text-secondary))] mr-1">{type==='text'?'#': <Volume2 size={14}/>}</span>
+                        <input value={name} onChange={e => setName(e.target.value.toLowerCase().replace(/\s/g, '-'))} placeholder="new-channel" className="w-full p-2 bg-transparent outline-none" />
+                    </div>
+                </div>
+            </div>
+            <div className="flex justify-end gap-2 bg-[rgb(var(--color-surface-hover))] -m-6 mt-0 p-4 border-t border-[rgb(var(--color-border))] rounded-b-lg">
+                <button onClick={onCancel} className="px-4 py-2 text-[rgb(var(--color-text-secondary))] hover:underline">Cancel</button>
+                <button onClick={() => onCreate({ name, type })} className="px-6 py-2 bg-[rgb(var(--color-primary))] text-white rounded disabled:opacity-50" disabled={!name}>Create Channel</button>
+            </div>
+        </>
+    );
 };
