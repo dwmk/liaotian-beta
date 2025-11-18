@@ -26,41 +26,33 @@ const Main = () => {
   const [pageSlug, setPageSlug] = useState<string>('');
   const [selectedProfileId, setSelectedProfileId] = useState<string | undefined>();
   const [showSearch, setShowSearch] = useState(false);
+  const [pendingGazeboInvite, setPendingGazeboInvite] = useState<string | null>(null);
+  
   const { user, profile, loading, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
-  // === NEW: Notification State ===
+  // === Notification State ===
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
-  const [showNotifications, setShowNotifications] = useState(false); // For a future modal
+  const [showNotifications, setShowNotifications] = useState(false);
 
-  const [pendingGazeboInvite, setPendingGazeboInvite] = useState<string | null>(null);
-	// Auto-join via /invite/:code
-	useEffect(() => {
-	  const match = location.pathname.match(/^\/invite\/([a-zA-Z0-9]{8})$/);
-	  if (match && user) {
-	    const code = match[1];
-	    (async () => {
-	      const { data: gazebo } = await supabase
-	        .from('gazebos')
-	        .select('*')
-	        .eq('invite_code', code)
-	        .single();
-	
-	      if (gazebo) {
-	        await supabase.from('gazebo_members').upsert({
-	          gazebo_id: gazebo.id,
-	          user_id: user.id,
-	          role: 'member'
-	        });
-	        navigate('/messages'); // or a dedicated /gazebo route
-	        // You may want to set activeGazebo via context/event
-	        window.location.reload(); // simple way to refresh list
-	      }
-	    })();
-	  }
-	}, [location, user]);
+  // === Auto-join via /invite/:code ===
+  useEffect(() => {
+    // Matches /invite/CODE (8 chars)
+    const match = location.pathname.match(/^\/invite\/([a-zA-Z0-9-]{3,20})$/); 
+    
+    if (match && user) {
+      const code = match[1];
+      const joinGazebo = async () => {
+        // Pass this code to Messages -> Gazebos to handle the actual join logic and state update
+        setPendingGazeboInvite(code);
+        setView('messages');
+        navigate('/message'); 
+      };
+      joinGazebo();
+    }
+  }, [location.pathname, user, navigate]);
 
   // Set theme from profile
   useEffect(() => {
@@ -69,13 +61,11 @@ const Main = () => {
     }
   }, [profile?.theme]);
 
-  // === NEW: Notification Fetching and Realtime ===
+  // === Notification Fetching and Realtime ===
   useEffect(() => {
     if (!user) return;
 
-    // 1. Initial fetch for counts
     const fetchCounts = async () => {
-      // Fetch unread messages
       const { count: msgCount } = await supabase
         .from('messages')
         .select('*', { count: 'exact', head: true })
@@ -83,7 +73,6 @@ const Main = () => {
         .eq('read', false);
       setUnreadMessages(msgCount || 0);
 
-      // Fetch unread notifications (assumes 'notifications' table exists)
       try {
         const { count: notifCount } = await supabase
           .from('notifications')
@@ -92,29 +81,25 @@ const Main = () => {
           .eq('is_read', false);
         setUnreadNotifications(notifCount || 0);
       } catch (error) {
-        console.warn("Could not fetch notifications. Did you create the 'notifications' table?");
+        console.warn("Could not fetch notifications.");
       }
     };
 
     fetchCounts();
 
-    // 2. Real-time subscriptions
     const channel = supabase.channel(`user-notifications:${user.id}`);
     
-    // Listen for new messages
     channel.on('postgres_changes', {
       event: 'INSERT',
       schema: 'public',
       table: 'messages',
       filter: `recipient_id=eq.${user.id}`
     }, (payload) => {
-      // Check if read status is false (though it should be by default)
       if (payload.new.read === false) {
         setUnreadMessages(c => c + 1);
       }
     });
 
-    // Listen for messages being marked as read (e.g., in Messages.tsx)
     channel.on('postgres_changes', {
       event: 'UPDATE',
       schema: 'public',
@@ -126,7 +111,6 @@ const Main = () => {
       }
     });
 
-    // Listen for new notifications
     channel.on('postgres_changes', {
       event: 'INSERT',
       schema: 'public',
@@ -136,14 +120,12 @@ const Main = () => {
       setUnreadNotifications(n => n + 1);
     });
 
-    // Listen for notifications being marked as read
     channel.on('postgres_changes', {
       event: 'UPDATE',
       schema: 'public',
       table: 'notifications',
       filter: `recipient_id=eq.${user.id}`
     }, (payload) => {
-      // This handles batch updates (e.g., "mark all as read")
       if (payload.old.is_read === false && payload.new.is_read === true) {
         setUnreadNotifications(n => Math.max(0, n - 1));
       }
@@ -157,32 +139,25 @@ const Main = () => {
 
   }, [user]);
 
-  // === URL PROFILE LOOKUP (via ?username, /user?username, and NEW: ?user={username}) ===
+  // === URL PROFILE LOOKUP ===
   useEffect(() => {
     const checkUrlForProfile = async () => {
       const search = window.location.search;
       const path = window.location.pathname;
       let username: string | null = null;
       
-      // Case 1: /?username or /user?username
       if (path === '/' || path === '/user') {
-          // If search is '?username'
           if (search.startsWith('?') && !search.includes('=')) {
               username = search.slice(1);
           }
       }
 
-      // Case 2: /?user={username} (handles optional trailing '&' or other query params)
       const userParamMatch = search.match(/\?user=([^&]+)/);
       if (userParamMatch) {
         username = userParamMatch[1];
       }
       
-      if (!username || username.includes('/')) {
-        // If no username or invalid format, just return.
-        // The other useEffect will handle setting view to 'feed'.
-        return;
-      }
+      if (!username || username.includes('/')) return;
 
       try {
         const { data } = await supabase
@@ -196,80 +171,63 @@ const Main = () => {
           setView('profile');
         }
       } catch (err) {
-        // Ignore — not a profile
+        // Ignore
       }
     };
 
     checkUrlForProfile();
     window.addEventListener('popstate', checkUrlForProfile);
     return () => window.removeEventListener('popstate', checkUrlForProfile);
-  }, []); // Note: This still only runs once, but the logic inside now checks the path.
+  }, []);
 
-  // === CUSTOM PAGE ROUTING (via /slug) ===
+  // === CUSTOM PAGE ROUTING ===
   useEffect(() => {
     const path = location.pathname;
     const search = location.search;
     
-    // Check for profile paths (/ and /user)
+    // Prevent redirect looping on invite links
+    if (path.startsWith('/invite/')) return;
+
     if (path === '/' || path === '/user') {
         const usernameQuery = search.startsWith('?') ? search.slice(1) : search;
-        
-        // Check for ?user={username} format
         let username = null;
         if (usernameQuery && !usernameQuery.includes('=')) {
-            // ?username format
             username = usernameQuery;
         } else if (usernameQuery.startsWith('user=')) {
-            // ?user={username} format, strip everything after '&'
             const userMatch = usernameQuery.match(/^user=([^&]+)/);
-            if (userMatch) {
-                username = userMatch[1];
-            }
+            if (userMatch) username = userMatch[1];
         }
         
-        // If a username is present, the Profile lookup useEffect will handle it.
-        // We just need to ensure we don't clobber it by setting view to 'feed'.
-        if (username && !username.includes('/')) {
-            // Profile lookup is running or will run. Don't set view('feed').
-            return;
-        }
+        if (username && !username.includes('/')) return;
         
-        // If no username, set view to feed.
         setView('feed');
         setPageSlug('');
-        setSelectedProfileId(undefined); // Ensure no profile is selected
+        setSelectedProfileId(undefined);
         return;
     }
     
-    // Handle /message?username
     if (path === '/message') {
         const username = search.startsWith('?') ? search.slice(1) : search;
         if (username && !username.includes('/')) {
             const lookupAndMessage = async () => {
                 try {
-                    // Check if user is logged in
                     if (!user) {
-                         // Optional: redirect to login or show auth
-                         // For now, just go to feed.
                          setView('feed');
                          return;
                     }
                     const { data } = await supabase
                         .from('profiles')
-                        .select('*') // Need full profile object
+                        .select('*')
                         .eq('username', username.toLowerCase())
                         .single();
                     
                     if (data) {
                         setView('messages');
                         setSelectedProfileId(undefined);
-                        // This event is heard by Messages.tsx
-                        // Wrap in timeout to ensure listener is attached
                         setTimeout(() => {
                           window.dispatchEvent(new CustomEvent('openDirectMessage', { detail: data }));
                         }, 0);
                     } else {
-                        // No user found, default to feed
                         setView('feed');
                     }
                 } catch (err) {
@@ -277,22 +235,18 @@ const Main = () => {
                 }
             };
             lookupAndMessage();
-            return; // Stop processing
+            return;
         }
         
-        // If no username, and user is logged in, go to messages main
         if (user) {
             setView('messages');
             setSelectedProfileId(undefined);
             return;
         }
-        
-        // If no username and not logged in, go to feed (which will show Auth)
         setView('feed');
         return;
     }
 
-    // Handle the unlisted /stats slug
     if (path === '/stats') {
       setView('stats');
       setPageSlug('');
@@ -300,13 +254,11 @@ const Main = () => {
       return;
     }
 
-    // Handle generic custom pages (like /about)
     const match = path.match(/^\/([a-zA-Z0-9-]+)$/);
     if (match) {
       const slug = match[1];
-      // Do not treat 'user' as a custom page
       if (slug === 'user') {
-          setView('feed'); // Or some error/redirect
+          setView('feed');
           setPageSlug('');
           setSelectedProfileId(undefined);
           return;
@@ -317,11 +269,10 @@ const Main = () => {
       return;
     }
 
-    // Fallback to feed for unmatched paths
     setView('feed');
     setPageSlug('');
     setSelectedProfileId(undefined);
-  }, [location.pathname, location.search, user]); // Added location.search and user
+  }, [location.pathname, location.search, user]); 
 
   // Keep internal navigation working
   useEffect(() => {
@@ -347,119 +298,62 @@ const Main = () => {
   // === ONLINE STATUS UPDATE ===
   useEffect(() => {
     if (!user) return;
-
     const updateLastSeen = async () => {
       await supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id);
     };
-
-    // Run immediately and then every 30 seconds
     updateLastSeen();
-    const interval = setInterval(updateLastSeen, 30000); // 30 seconds
-
-    return () => {
-      clearInterval(interval);
-    };
+    const interval = setInterval(updateLastSeen, 30000);
+    return () => clearInterval(interval);
   }, [user]);
 
-if (loading) {
-		return (
-			<div
-				className="min-h-screen bg-[rgb(var(--color-background))] flex flex-col items-center justify-center text-2xl font-bold text-[rgb(var(--color-text))]"
-				style={{
-					background: `linear-gradient(to bottom right, rgba(var(--color-surface),0.05), rgba(var(--color-primary),0.05))`,
-				}}
-			>
-				<div className="logo-loading-container w-[150px] h-auto relative mb-4">
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						viewBox={SVG_VIEWBOX}
-						className="logo-svg"
-					>
-						<defs>
-							{/* Clip-Path to control the vertical fill */}
-							<clipPath id="logo-clip">
-								<rect
-									id="clip-rect"
-									x="0"
-									y="0"
-									width="100%"
-									height="100%"
-								/>
-							</clipPath>
-						</defs>
-
-						{/* Background/Outline (unfilled portion) */}
-						<path
-							d={SVG_PATH}
-							fill="none"
-							stroke="rgb(var(--color-primary))"
-							strokeWidth="10"
-							strokeOpacity="0.1" 
-						/>
-
-						{/* The Filled Logo - Apply the clip-path and scanline CSS class */}
-						<path
-							d={SVG_PATH}
-							fill="rgb(var(--color-primary))" 
-							clipPath="url(#logo-clip)"
-							className="logo-fill-animated"
-						/>
-					</svg>
-				</div>
-				Loading...
-			</div>
-		);
-	}
-
-  // === RENDER CUSTOM PAGE / STATS PAGE ===
-  if (view === 'page' && pageSlug) {
-    return <CustomPage slug={pageSlug} />;
-  }
-  
-  // STATS page
-  if (view === 'stats') {
-      return <Stats />;
+  if (loading) {
+    return (
+        <div
+            className="min-h-screen bg-[rgb(var(--color-background))] flex flex-col items-center justify-center text-2xl font-bold text-[rgb(var(--color-text))]"
+            style={{
+                background: `linear-gradient(to bottom right, rgba(var(--color-surface),0.05), rgba(var(--color-primary),0.05))`,
+            }}
+        >
+            <div className="logo-loading-container w-[150px] h-auto relative mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox={SVG_VIEWBOX} className="logo-svg">
+                    <defs>
+                        <clipPath id="logo-clip"><rect id="clip-rect" x="0" y="0" width="100%" height="100%" /></clipPath>
+                    </defs>
+                    <path d={SVG_PATH} fill="none" stroke="rgb(var(--color-primary))" strokeWidth="10" strokeOpacity="0.1" />
+                    <path d={SVG_PATH} fill="rgb(var(--color-primary))" clipPath="url(#logo-clip)" className="logo-fill-animated" />
+                </svg>
+            </div>
+            Loading...
+        </div>
+    );
   }
 
+  if (view === 'page' && pageSlug) return <CustomPage slug={pageSlug} />;
+  if (view === 'stats') return <Stats />;
 
-  // === NOT LOGGED IN? SHOW AUTH OR PUBLIC PROFILE ===
   if (!user || !profile) {
     if (view === 'profile' && selectedProfileId) {
       return (
         <div className="min-h-screen bg-[rgb(var(--color-background))]">
           <div className="bg-[rgb(var(--color-surface))] border-b border-[rgb(var(--color-border))] sticky top-0 z-50 shadow-sm">
             <div className="max-w-6xl mx-auto flex items-center justify-between px-4 h-14">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox={SVG_VIEWBOX}
-                className="w-[32px] h-[32px] cursor-pointer"
-                onClick={() => navigate('/')}
-              >
-                <path
-                  d={SVG_PATH}
-                  fill="rgb(var(--color-primary))"
-                />
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox={SVG_VIEWBOX} className="w-[32px] h-[32px] cursor-pointer" onClick={() => navigate('/')}>
+                <path d={SVG_PATH} fill="rgb(var(--color-primary))" />
               </svg>
-              <a href="/" className="text-[rgb(var(--color-primary))] hover:text-[rgba(var(--color-primary),0.8)] font-bold">
-                ← Back to Home
-              </a>
+              <a href="/" className="text-[rgb(var(--color-primary))] hover:text-[rgba(var(--color-primary),0.8)] font-bold">← Back to Home</a>
             </div>
           </div>
           <Profile userId={selectedProfileId} />
         </div>
       );
     }
-    // If trying to message while not logged in, show Auth
-    if (view === 'messages') {
-        return <Auth />;
-    }
+    if (view === 'messages') return <Auth />;
     return <Auth />;
   }
 
   const handleMessageUser = (profile: any) => {
     setView('messages');
     setSelectedProfileId(undefined);
-    // Wrap in timeout to ensure listener is attached after view switch
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('openDirectMessage', { detail: profile }));
     }, 0);
@@ -470,109 +364,44 @@ if (loading) {
     setSelectedProfileId(undefined);
   };
   
-  // === NEW: Handle clicking the notification bell ===
   const handleNotificationsClick = async () => {
-    // 1. Show the notification modal/page (component not built yet)
     setShowNotifications(true); 
-    // Or: setView('notifications');
-    
-    // 2. Mark all as read in the DB
     try {
       await supabase
         .from('notifications')
         .update({ is_read: true })
         .eq('recipient_id', user.id)
         .eq('is_read', false);
-    
-      // 3. Optimistically update the UI
       setUnreadNotifications(0);
-    } catch (error) {
-       console.warn("Could not mark notifications as read.");
-    }
+    } catch (error) { console.warn("Could not mark notifications as read."); }
   };
 
   return (
     <div className="min-h-screen bg-[rgb(var(--color-background))]">
       <nav className="bg-[rgb(var(--color-surface))] border-b border-[rgb(var(--color-border))] sticky top-0 z-50 shadow-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between px-4 h-14">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox={SVG_VIEWBOX}
-            className="w-[32px] h-[32px] cursor-pointer"
-            onClick={() => { setView('feed'); setSelectedProfileId(undefined); navigate('/'); }}
-          >
-            <path
-              d={SVG_PATH}
-              fill="rgb(var(--color-primary))"
-            />
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox={SVG_VIEWBOX} className="w-[32px] h-[32px] cursor-pointer" onClick={() => { setView('feed'); setSelectedProfileId(undefined); navigate('/'); }}>
+            <path d={SVG_PATH} fill="rgb(var(--color-primary))" />
           </svg>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setShowSearch(true)}
-              className="p-3 rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition"
-            >
+            <button onClick={() => setShowSearch(true)} className="p-3 rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition">
               <SearchIcon size={20} className="text-[rgb(var(--color-text-secondary))]" />
             </button>
-            
-            <button
-              onClick={() => {
-                setView('feed');
-                setSelectedProfileId(undefined);
-                navigate('/');
-              }}
-              className={`p-3 rounded-full transition ${
-                view === 'feed' ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'
-              }`}
-            >
+            <button onClick={() => { setView('feed'); setSelectedProfileId(undefined); navigate('/'); }} className={`p-3 rounded-full transition ${view === 'feed' ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'}`}>
               <Home size={20} />
             </button>
-            
-            {/* === UPDATED: Messages Icon === */}
-            <button
-              onClick={() => {
-                setView('messages');
-                setSelectedProfileId(undefined);
-                navigate('/message'); // Navigate to /message base
-              }}
-              className={`relative p-3 rounded-full transition ${ // Added relative
-                view === 'messages' ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'
-              }`}
-            >
+            <button onClick={() => { setView('messages'); setSelectedProfileId(undefined); navigate('/message'); }} className={`relative p-3 rounded-full transition ${view === 'messages' ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'}`}>
               <MessageSquare size={20} />
-              {unreadMessages > 0 && ( // Added dot
-                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              )}
+              {unreadMessages > 0 && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
             </button>
-
-			<button
-              onClick={handleNotificationsClick}
-              className="relative p-3 rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition"
-            >
+			      <button onClick={handleNotificationsClick} className="relative p-3 rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition">
               <Bell size={20} className="text-[rgb(var(--color-text-secondary))]" />
-              {unreadNotifications > 0 && (
-                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              )}
+              {unreadNotifications > 0 && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
             </button>
-            
-            <button
-              onClick={() => {
-                if (!profile?.username) return;
-                navigate(`/?user=${profile.username}`);
-                setSelectedProfileId(undefined);
-                setView('profile');
-              }}
-              className={`p-3 rounded-full transition ${
-                view === 'profile' && !selectedProfileId
-                  ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]'
-                  : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'
-              }`}
-            >
+            <button onClick={() => { if (!profile?.username) return; navigate(`/?user=${profile.username}`); setSelectedProfileId(undefined); setView('profile'); }} className={`p-3 rounded-full transition ${view === 'profile' && !selectedProfileId ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'}`}>
               <User size={20} />
             </button>
-            <button
-              onClick={signOut}
-              className="p-3 rounded-full hover:bg-[rgba(239,68,68,0.1)] text-red-600 transition"
-            >
+            <button onClick={signOut} className="p-3 rounded-full hover:bg-[rgba(239,68,68,0.1)] text-red-600 transition">
               <LogOut size={20} />
             </button>
           </div>
@@ -583,25 +412,15 @@ if (loading) {
         {view === 'feed' && <Feed />}
         {view === 'messages' && (
 		    <Messages 
-		        // Pass the invite code down
 		        initialInviteCode={pendingGazeboInvite} 
-		        // A callback for Gazebos to tell App.tsx the code has been processed
 		        onInviteHandled={() => setPendingGazeboInvite(null)} 
 		    />
 		)}
         {view === 'profile' && (
-          <Profile
-            userId={selectedProfileId}
-            onMessage={handleMessageUser}
-            onSettings={
-              !selectedProfileId || selectedProfileId === user.id ? handleSettings : undefined
-            }
-          />
+          <Profile userId={selectedProfileId} onMessage={handleMessageUser} onSettings={!selectedProfileId || selectedProfileId === user.id ? handleSettings : undefined} />
         )}
         {view === 'settings' && <Settings />}
-        
         {showNotifications && <Notifications onClose={() => setShowNotifications(false)} />}
-        
         {showSearch && <Search onClose={() => setShowSearch(false)} />}
         {view === 'stats' && user && <Stats />}
       </main>
@@ -619,7 +438,7 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Main />
-		<Status />
+		    <Status />
         <Analytics/>
       </BrowserRouter>
     </AuthProvider>
