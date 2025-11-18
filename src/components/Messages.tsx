@@ -841,20 +841,6 @@ export const Messages = ({
     );
   }
 
-  {/* This context menu is rendered at root level if present */}
-  if (reactionMenu) {
-      return (
-        <>
-        {/* Recursive call or fragment structure isn't ideal here inside the component, 
-            but standard returns usually work. 
-            However, since we returned early for 'gazebos', we are in 'chats' mode below.
-            We just need to make sure this overlay renders.
-            We will render it at the bottom of the main return.
-        */}
-        </>
-      );
-  }
-
     // === STANDARD CHAT INTERFACE ===
   return (
     <div className="flex h-full bg-[rgb(var(--color-background))] overflow-hidden">
