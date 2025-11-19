@@ -352,10 +352,15 @@ const Main = () => {
     return <Auth />;
   }
 
-  const handleMessageUser = (profile: any) => {
+const handleMessageUser = (targetProfile: any) => {
     setView('messages');
     setSelectedProfileId(undefined);
-    navigate(`/message?user=${profile.username}`);
+    // Update URL first
+    navigate(`/message?user=${targetProfile.username}`);
+    // Dispatch event so Messages component picks it up immediately without refresh
+    setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('openDirectMessage', { detail: targetProfile }));
+    }, 100);
   };
 
   const handleSettings = () => {
