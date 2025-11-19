@@ -121,7 +121,7 @@ const formatDateHeader = (dateString: string) => {
 
 // --- Main Component ---
 export const Gazebos = ({ initialInviteCode, onInviteHandled, initialGazeboId }: GazebosProps) => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   
   // Data State
@@ -566,8 +566,25 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled, initialGazeboId }:
       
       setIsUploading(true);
       setUploadProgress(0);
+      
+      let finalContent = content.trim();
       let media_url = remoteUrl;
       let media_type = null;
+
+      // Auto-detect URL if no explicit media attached
+      if (!file && !media_url && finalContent) {
+          const urlRegex = /(https?:\/\/[^\s]+)/g;
+          const match = finalContent.match(urlRegex);
+          if (match) {
+              const detectedUrl = match[0];
+              // Check if it looks like media
+              if (detectedUrl.match(/\.(jpeg|jpg|gif|png|webp|mp4|webm|mp3|wav)$/i)) {
+                  media_url = detectedUrl;
+                  // Remove URL from text content if it's the *only* thing
+                  if (finalContent === detectedUrl) finalContent = '';
+              }
+          }
+      }
 
       if (file) {
           if (file.type.startsWith('audio/')) media_type = 'audio';
@@ -682,6 +699,17 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled, initialGazeboId }:
 
   const isMobile = window.innerWidth <= 768;
 
+  const handlePaste = (e: React.ClipboardEvent) => {
+      if (e.clipboardData.files.length > 0) {
+          const pastedFile = e.clipboardData.files[0];
+          if (pastedFile.type.startsWith('image/')) {
+              setFile(pastedFile);
+              setRemoteUrl('');
+              e.preventDefault();
+          }
+      }
+  };
+
   // --- RENDER START ---
   return (
     <div className="flex h-full w-full bg-[rgb(var(--color-background))] overflow-hidden text-[rgb(var(--color-text))]">
@@ -770,10 +798,14 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled, initialGazeboId }:
           )}
 
           <div className="p-2 bg-[rgb(var(--color-surface-hover))] flex items-center gap-2 border-t border-[rgb(var(--color-border))]">
-               <img src={user?.user_metadata.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.user_metadata.username}`} className="w-8 h-8 rounded-full bg-gray-500 cursor-pointer" onClick={() => { if(user) setViewingProfile(members.find(m=>m.user_id===user.id)?.profiles || null)}} />
+               <img 
+                  src={profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile?.username}`} 
+                  className="w-8 h-8 rounded-full bg-gray-500 object-cover cursor-pointer" 
+                  onClick={() => { if(profile) setViewingProfile(profile)}} 
+               />
                <div className="flex-1 min-w-0">
-                   <div className="text-sm font-bold truncate">{user?.user_metadata.display_name || 'User'}</div>
-                   <div className="text-xs text-[rgb(var(--color-text-secondary))] truncate">#{user?.email?.split('@')[0]}</div>
+                   <div className="text-sm font-bold truncate">{profile?.display_name || 'Loading...'}</div>
+                   <div className="text-xs text-[rgb(var(--color-text-secondary))] truncate">@{profile?.username || '...'}</div>
                </div>
                <button className="p-1 hover:bg-[rgb(var(--color-surface))]" onClick={() => setActiveGazebo(null)}><LogOut size={16}/></button>
           </div>
@@ -904,7 +936,7 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled, initialGazeboId }:
 
                   {/* Input Area */}
                   <div className="p-4 pt-0">
-                      <div className="bg-[rgb(var(--color-surface-hover))] rounded-lg p-2 pr-4 shadow-inner relative overflow-hidden">
+                      <div className="bg-[rgb(var(--color-surface-hover))] rounded-lg p-2 pr-4 shadow-inner relative">
                           
                           {/* Progress Bar */}
                           {isUploading && (
@@ -962,12 +994,13 @@ export const Gazebos = ({ initialInviteCode, onInviteHandled, initialGazeboId }:
                                  )}
                              </button>
                              
-                             {/* Text Input */}
+                            {/* Text Input */}
                              <input 
                                 className="flex-1 bg-transparent outline-none py-2 max-h-32 overflow-y-auto text-[rgb(var(--color-text))]" 
                                 placeholder={`Message #${activeChannel.name}`}
                                 value={content}
                                 onChange={e => setContent(e.target.value)}
+                                onPaste={handlePaste} // Added Paste Handler
                                 onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) handleSend(e); }}
                              />
                              
