@@ -150,7 +150,7 @@ export const Feed = () => {
   const goToProfile = async (profileId: string) => {
     const { data } = await supabase.from('profiles').select('username').eq('id', profileId).single();
     if (data) {
-      window.history.replaceState({}, '', `/?${data.username}`);
+      window.history.replaceState({}, '', `/?user=${data.username}`);
       window.dispatchEvent(new CustomEvent('navigateToProfile', { detail: profileId }));
     }
   };
