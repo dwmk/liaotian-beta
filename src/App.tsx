@@ -26,7 +26,7 @@ const Main = () => {
   const [pageSlug, setPageSlug] = useState<string>('');
   const [selectedProfileId, setSelectedProfileId] = useState<string | undefined>();
   const [showSearch, setShowSearch] = useState(false);
-  const [selectedPostId, setSelectedPostId] = useState<string | undefined>(); // NEW: For post deep links
+  const [selectedPostId, setSelectedPostId] = useState<string | undefined>(); 
   
   const [pendingGazeboInvite, setPendingGazeboInvite] = useState<string | null>(null);
   const [pendingGazeboId, setPendingGazeboId] = useState<string | null>(null);
@@ -47,7 +47,7 @@ const Main = () => {
       const path = location.pathname;
       const search = new URLSearchParams(location.search);
       
-      // 1. Handle Invite Codes (/invite/:code or ?invite=:code)
+      // 1. Priority: Invite Codes (Takes over everything if present)
       const pathInviteMatch = path.match(/^\/invite\/([a-zA-Z0-9-]{3,20})$/);
       const queryInvite = search.get('invite');
       const inviteCode = pathInviteMatch ? pathInviteMatch[1] : queryInvite;
@@ -56,12 +56,11 @@ const Main = () => {
         setPendingGazeboInvite(inviteCode);
         setView('messages');
         setInitialTab('gazebos');
-        // If it was a path, normalize it
-        if (pathInviteMatch) navigate('/message'); 
+        if (pathInviteMatch) navigate('/message', { replace: true }); 
         return;
       }
 
-      // 2. Handle Gazebos (/gazebo/:id or ?gazebo=:id)
+      // 2. Priority: Gazebos (Direct link to server)
       const pathGazeboMatch = path.match(/^\/gazebo\/?([a-zA-Z0-9-]{0,})?$/);
       const queryGazeboId = search.get('gazebo');
       const gazeboId = pathGazeboMatch ? pathGazeboMatch[1] : queryGazeboId;
@@ -74,10 +73,31 @@ const Main = () => {
         return;
       }
 
-      // 3. Handle Status Deep Links (?status=:id)
+      // 3. Priority: Message User (Direct Message)
+      const msgUser = search.get('user');
+      if (path === '/message' && msgUser && user) {
+          // We just handle the view here, the Messages component reads the URL param/event
+          // But to ensure we load the conversation, we can trigger the internal navigation event if needed
+          // or let the Messages component handle it via the URL param directly. 
+          // Current Messages.tsx uses window event, let's bridge it if needed or rely on search param.
+          // Note: The provided Messages.tsx doesn't read ?user= natively yet, it relies on 'openDirectMessage' event.
+          // We will need to make sure we handle this in Messages or dispatch the event here.
+          // For now, we will set the view. Messages.tsx should ideally read the param.
+          
+          // Dispatching event after a short delay to ensure Messages component is mounted
+          const { data } = await supabase.from('profiles').select('*').eq('username', msgUser).single();
+          if (data) {
+             setTimeout(() => {
+                 window.dispatchEvent(new CustomEvent('openDirectMessage', { detail: data }));
+             }, 500);
+          }
+          setView('messages');
+          return;
+      }
+
+      // 4. Priority: Status Deep Links
       const statusId = search.get('status');
       if (statusId && user) {
-        // We need to fetch the status to know who it belongs to and open the viewer
         const { data: statusData } = await supabase
           .from('statuses')
           .select('*, profiles!user_id(*)')
@@ -90,26 +110,25 @@ const Main = () => {
              statuses: [statusData],
              hasUnseen: false
           };
-          // Dispatch event to open viewer
           window.dispatchEvent(new CustomEvent('openStatusViewer', {
              detail: {
                users: [profileWithStatus],
                initialUserId: statusData.user_id
              }
           }));
-          setView('feed'); // Default to feed behind the modal
+          setView('feed'); 
         }
         return;
       }
 
-      // 4. Handle Post Deep Links (?post=:id)
+      // 5. Priority: Post Deep Links
       const postId = search.get('post');
       if (postId) {
          const { data: postData } = await supabase
             .from('posts')
             .select('user_id')
             .eq('id', postId)
-            .maybeSingle(); // Use maybeSingle to avoid errors if not found
+            .maybeSingle(); 
          
          if (postData) {
              setSelectedProfileId(postData.user_id);
@@ -119,9 +138,10 @@ const Main = () => {
          }
       }
 
-      // 5. Handle Profile (?user=:username)
+      // 6. Priority: User Profile (via root /?user=)
+      // Only if we are at root AND have user param, OR path matches standard profile route if one existed
       const usernameQuery = search.get('user');
-      if (usernameQuery) {
+      if (path === '/' && usernameQuery) {
          const { data } = await supabase
             .from('profiles')
             .select('id')
@@ -134,7 +154,7 @@ const Main = () => {
          }
       }
       
-      // 6. Handle Standard Routes
+      // 7. Priority: Standard Routes
       if (path === '/message') {
         setView('messages');
         return;
@@ -144,11 +164,12 @@ const Main = () => {
         return;
       }
       
-      // 7. Custom Page Slugs
+      // 8. Priority: Custom Page Slugs
       const slugMatch = path.match(/^\/([a-zA-Z0-9-]+)$/);
       if (slugMatch) {
          const slug = slugMatch[1];
-         if (slug !== 'user' && slug !== 'invite' && slug !== 'gazebo') {
+         // Ignore reserved words just in case
+         if (!['user', 'invite', 'gazebo', 'message', 'stats'].includes(slug)) {
              setView('page');
              setPageSlug(slug);
              return;
@@ -334,9 +355,7 @@ const Main = () => {
   const handleMessageUser = (profile: any) => {
     setView('messages');
     setSelectedProfileId(undefined);
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('openDirectMessage', { detail: profile }));
-    }, 0);
+    navigate(`/message?user=${profile.username}`);
   };
 
   const handleSettings = () => {
