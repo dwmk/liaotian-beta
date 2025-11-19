@@ -2,7 +2,7 @@
 easy-to-host social platforms for everyone
 
 ```
-Current version: 1.0.9A
+Current version: 1.0.9B
 ```
 
 ### What makes LiaoTian (LT) so special from already existing social media/networking platforms?
@@ -56,6 +56,9 @@ If you just want to create an account on **Liaoverse** (our official deployment)
 - [x] Message read receipts (checkmarks)
 - [x] Groupchat functionality with 2 modes - singular channel (like WhatsApp, Messenger, Telegram) or multi channel (like Discord, Slack, Matrix).
 - [x] Reactions for messages
+- [x] Paste from clipboard to messages (in Gazebos till now)
+- [x] Public post sharing via context menu
+- [x] Gazebo joining Welcome page
 - [ ] Embed links
 - [ ] Create and manage groups
 - [ ] Posting long-form content, e.g. blogs
@@ -75,7 +78,10 @@ If you just want to create an account on **Liaoverse** (our official deployment)
 - [ ] audio and video calling may require a turn server
 - [ ] Gazebos lack smooth UI UX + audio message previews missing
 - [ ] Gazebos lack emoji reactions
+- [ ] Gazebo "message" button on user profile card not opening DM directly (requires a refresh)
 - [ ] Messages emoji reactions not showing up on frontend
+- [ ] Current App.tsx URL param handling messes up non-conventional usernames (previous versions allowed them)
+- [ ] App.tsx navbar message icon notification dot staying on, even after reading all (until refreshing)
 
 ---
 
