@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef, useCallback, lazy, Suspense } from 'react';
 import { supabase, Message, Profile, uploadMedia, MessageReaction } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Send, BadgeCheck, Search, ArrowLeft, X, Paperclip, FileText, Link, CornerUpLeft, Phone, Video, Mic, Play, Pause, Check, CheckCheck, MessageSquare, Users, Smile, Image as ImageIcon, Film, Music, Folder } from 'lucide-react';
+import { Send, BadgeCheck, Search, ArrowLeft, X, Paperclip, FileText, Link, CornerUpLeft, Phone, Video, Mic, Play, Pause, Check, CheckCheck, MessageSquare, Users, Smile, Image as ImageIcon, Film, Music, Folder, FileIcon } from 'lucide-react';
 import { MessageEmbed } from './MessageEmbed';
 
 // Lazy load components to prevent Circular Dependency ReferenceErrors ("Cannot access 'le' before initialization")
