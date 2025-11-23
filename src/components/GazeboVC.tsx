@@ -1,11 +1,13 @@
 // src/components/GazeboVC.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Peer from 'peerjs';
 import { 
   Mic, MicOff, Video, VideoOff, Monitor, PhoneOff, 
-  Maximize2, Minimize2, Users, Volume2, X, Expand, Shrink
+  Maximize2, Minimize2, Users, Volume2, X, Expand, Shrink, AlertCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+
+// --- Types ---
 
 interface Toast {
   id: string;
@@ -14,13 +16,14 @@ interface Toast {
 }
 
 interface VoicePeer {
-  peerId: string;
-  userId: string;
+  peerId: string;       // The auto-generated PeerJS ID
+  userId: string;       // Supabase User ID
   stream?: MediaStream;
-  profile?: any;
+  profile?: { display_name: string; avatar_url: string; username: string };
   isMuted?: boolean;
   isVideoOff?: boolean;
   isScreenSharing?: boolean;
+  volume: number;       // For audio visualizer
 }
 
 interface GazeboVCProps {
@@ -32,84 +35,80 @@ interface GazeboVCProps {
   onToggleMinimize: () => void;
 }
 
-// --- Memoized Video Component to prevent flashing ---
+// --- Video Component (Robust) ---
 const VideoTile = React.memo(({ 
-    peerId, 
-    userId,
-    stream, 
-    profile, 
-    isMuted, 
+    peer, 
     isFocused, 
-    volume, 
     onToggleFocus 
 }: { 
-    peerId: string;
-    userId: string;
-    stream?: MediaStream;
-    profile: any;
-    isMuted?: boolean;
+    peer: VoicePeer;
     isFocused: boolean;
-    volume: number;
     onToggleFocus: () => void;
 }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
 
-    // Only attach stream when it actually changes, NOT on every render
+    // Robust stream attachment
     useEffect(() => {
-        if (videoRef.current && stream) {
-            videoRef.current.srcObject = stream;
+        const videoEl = videoRef.current;
+        if (videoEl && peer.stream) {
+            videoEl.srcObject = peer.stream;
+            videoEl.play().catch(e => console.warn("Autoplay blocked:", e));
         }
-    }, [stream]);
+    }, [peer.stream]);
 
-    const hasVideo = stream && stream.getVideoTracks().length > 0 && stream.getVideoTracks()[0].enabled;
+    const hasVideo = peer.stream && peer.stream.getVideoTracks().length > 0 && peer.stream.getVideoTracks()[0].enabled;
+    const isSpeaking = peer.volume > 15;
 
     return (
         <div 
-            className={`relative bg-gray-800 rounded-xl overflow-hidden border-2 transition-all duration-200 group ${volume > 20 ? 'border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]' : 'border-transparent'} ${isFocused ? 'w-full h-full' : 'aspect-video'}`}
+            className={`
+                relative bg-gray-800 rounded-xl overflow-hidden border-2 transition-all duration-300
+                ${isSpeaking ? 'border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]' : 'border-transparent'} 
+                ${isFocused ? 'col-span-full row-span-full h-full' : 'aspect-video'}
+            `}
             onDoubleClick={onToggleFocus}
         >
             {/* Video Feed */}
-            {hasVideo ? (
+            {hasVideo && !peer.isVideoOff ? (
                 <video 
                     ref={videoRef}
                     autoPlay 
                     playsInline 
-                    muted={peerId === 'local'} // Always mute local to prevent echo
+                    muted={peer.peerId === 'local'} // Mute self to avoid feedback
                     className="w-full h-full bg-black object-cover" 
                 />
             ) : (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
-                    <div className={`relative transition-transform duration-150 ${volume > 20 ? 'scale-110' : 'scale-100'}`}>
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+                    <div className={`relative transition-transform duration-150 ${isSpeaking ? 'scale-110' : 'scale-100'}`}>
                         <img 
-                            src={profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`} 
-                            className="w-24 h-24 rounded-full shadow-2xl object-cover bg-gray-700"
+                            src={peer.profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${peer.userId}`} 
+                            className="w-20 h-20 rounded-full shadow-2xl object-cover bg-gray-700 z-10 relative"
+                            alt={peer.userId}
                         />
-                        {volume > 20 && <div className="absolute -inset-2 rounded-full border-4 border-green-500 opacity-50 animate-ping" />}
+                        {isSpeaking && <div className="absolute -inset-2 rounded-full border-4 border-green-500 opacity-50 animate-ping" />}
                     </div>
                 </div>
             )}
 
-            {/* Status Overlay */}
-            <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center z-10 pointer-events-none">
-                <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg flex items-center gap-2 text-white text-sm font-medium shadow-lg">
-                    {isMuted ? <MicOff size={14} className="text-red-500" /> : <Mic size={14} className="text-green-400" />}
-                    {profile?.display_name}
+            {/* Overlay Info */}
+            <div className="absolute bottom-3 left-3 right-3 flex justify-between items-center z-20">
+                <div className="bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg flex items-center gap-2 text-white text-xs font-medium">
+                    {peer.isMuted ? <MicOff size={12} className="text-red-500" /> : <Mic size={12} className="text-green-400" />}
+                    <span className="truncate max-w-[100px]">{peer.profile?.display_name || 'Connecting...'}</span>
                 </div>
             </div>
 
-            {/* Hover Controls */}
-            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto">
-                <button 
-                    onClick={onToggleFocus}
-                    className="p-1.5 bg-black/50 text-white rounded hover:bg-black/70"
-                >
-                    {isFocused ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}
-                </button>
+            {/* Controls Overlay (Hover) */}
+            <div className="absolute top-2 right-2 opacity-0 hover:opacity-100 transition-opacity z-20">
+                 <button onClick={onToggleFocus} className="p-1.5 bg-black/50 rounded-full text-white">
+                     {isFocused ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}
+                 </button>
             </div>
         </div>
     );
 });
 
+// --- Main Controller ---
 export const GazeboVC: React.FC<GazeboVCProps> = ({ 
   channelId, 
   channelName, 
@@ -118,387 +117,425 @@ export const GazeboVC: React.FC<GazeboVCProps> = ({
   isMinimized,
   onToggleMinimize
 }) => {
+  // State
+  const [localPeerId, setLocalPeerId] = useState<string | null>(null);
   const [peers, setPeers] = useState<Record<string, VoicePeer>>({});
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [isMicOn, setIsMicOn] = useState(true);
-  const [isCameraOn, setIsCameraOn] = useState(false);
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  
+  // Media State
+  const [mediaState, setMediaState] = useState({ mic: true, camera: false, screen: false });
   const [focusedPeerId, setFocusedPeerId] = useState<string | null>(null);
-  const [volumeMap, setVolumeMap] = useState<Record<string, number>>({});
-  const [isFullScreenMode, setIsFullScreenMode] = useState(false);
-
+  const [isFullScreen, setIsFullScreen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const addToast = (message: string, type: 'error' | 'info' | 'success' = 'info') => {
-    const id = Math.random().toString(36).substr(2, 9);
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  // Refs
+  const peerRef = useRef<Peer | null>(null);
+  const peersRef = useRef<Record<string, VoicePeer>>({}); // Mutable ref for instant access in callbacks
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const channelRef = useRef<any>(null); // Supabase Realtime Channel
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Sync ref with state
+  useEffect(() => { peersRef.current = peers; }, [peers]);
+
+  // Toast Helper
+  const addToast = (message: string, type: 'error' | 'info' | 'success') => {
+      const id = Math.random().toString(36).substr(2, 9);
+      setToasts(prev => [...prev, { id, message, type }]);
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
   };
 
-  const peerRef = useRef<Peer | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const presenceChannelRef = useRef<any>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const sourceNodesRef = useRef<Map<string, MediaStreamAudioSourceNode>>(new Map());
-
-  // Initialize Connection
+  // --- 1. Initialization ---
   useEffect(() => {
-    if (!user || !channelId) return;
-
-    const init = async () => {
+    const initVoiceChat = async () => {
       try {
-        // 1. Get Local Audio Stream
-        let stream: MediaStream;
-        try {
-            stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        } catch (mediaErr) {
-            console.error("Media access error:", mediaErr);
-            addToast("Could not access microphone. Please check permissions.", 'error');
-            onDisconnect();
-            return;
-        }
-
+        addToast('Accessing media devices...', 'info');
+        
+        // A. Get Media Stream
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         setLocalStream(stream);
         localStreamRef.current = stream;
         setupAudioAnalysis('local', stream);
 
-        // 2. Initialize PeerJS with retry logic potential (simplified here for robustness)
-        const myPeerId = `${user.id}__${channelId}`;
-        
-        // Sanitize Peer ID (remove special chars if any, though UUIDs are safe)
-        const peer = new Peer(myPeerId, {
-            debug: 1, // Only errors
+        // B. Initialize PeerJS (Auto ID Generation)
+        const peer = new Peer({
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'stun:global.stun.twilio.com:3478' }
                 ]
-            }
+            },
+            debug: 1 // Errors only
         });
+
         peerRef.current = peer;
 
-        peer.on('open', (id) => {
-          addToast("Connected to voice server", 'success');
-          joinPresenceChannel(id, stream);
+        peer.on('open', async (id) => {
+            console.log("My Peer ID:", id);
+            setLocalPeerId(id);
+            addToast('Connected to signaling server', 'success');
+            
+            // C. Store session in DB (Centralized Storage)
+            await supabase.from('active_voice_sessions').upsert({
+                channel_id: channelId,
+                user_id: user.id,
+                peer_id: id
+            });
+
+            // D. Join Supabase Presence (Fast Signaling)
+            joinPresenceChannel(id, stream);
         });
 
         peer.on('call', (call) => {
-          addToast("Incoming connection...", 'info');
-          call.answer(stream);
-          handleCallStream(call);
+            console.log("Incoming call from:", call.peer);
+            call.answer(stream);
+            handleCall(call);
         });
 
         peer.on('error', (err) => {
-            console.error('PeerJS Error:', err);
+            console.error("PeerJS Error:", err);
+            addToast(`Connection Error: ${err.type}`, 'error');
             if (err.type === 'peer-unavailable') {
-                // Ignore, peer just left
-            } else if (err.type === 'unavailable-id') {
-                addToast("Already connected in another tab.", 'error');
-                onDisconnect();
-            } else if (err.type === 'network') {
-                addToast("Network error. Reconnecting...", 'error');
-                peer.reconnect();
-            } else {
-                addToast(`Connection Error: ${err.type}`, 'error');
+                // Remove the peer from our list locally
+                const pid = err.message.split(' ').pop(); // Extract ID from error message if possible
+                if (pid) removePeer(pid);
             }
         });
 
-        peer.on('disconnected', () => {
-            addToast("Disconnected from signaling server. Reconnecting...", 'info');
-            peer.reconnect();
-        });
-
-      } catch (err) {
-        console.error("Initialization Error:", err);
-        addToast("Failed to initialize voice chat.", 'error');
+      } catch (err: any) {
+        console.error("Init Error:", err);
+        addToast(`Failed to start: ${err.message}`, 'error');
         onDisconnect();
       }
     };
 
-    init();
+    initVoiceChat();
 
     return () => cleanup();
-  }, [channelId, user]);
+  }, [channelId]);
 
-  const cleanup = () => {
-    presenceChannelRef.current?.unsubscribe();
-    peerRef.current?.destroy();
-    localStreamRef.current?.getTracks().forEach(t => t.stop());
-    
-    // Cleanup Audio Context
-    if (audioContextRef.current) {
-        audioContextRef.current.close();
-    }
-    
-    setPeers({});
-    setLocalStream(null);
-  };
-
-  // --- Audio Visualizer Logic ---
-  const setupAudioAnalysis = (peerId: string, stream: MediaStream) => {
-      if (!audioContextRef.current) {
-          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      
-      // Prevent duplicate nodes
-      if (sourceNodesRef.current.has(peerId)) return;
-
-      try {
-        const analyser = audioContextRef.current.createAnalyser();
-        analyser.fftSize = 32;
-        const source = audioContextRef.current.createMediaStreamSource(stream);
-        source.connect(analyser);
-        sourceNodesRef.current.set(peerId, source);
-
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        
-        const updateVolume = () => {
-            if (!analyser) return;
-            analyser.getByteFrequencyData(dataArray);
-            let sum = 0;
-            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-            const average = sum / dataArray.length;
-            
-            setVolumeMap(prev => ({...prev, [peerId]: average}));
-            requestAnimationFrame(updateVolume);
-        };
-        updateVolume();
-      } catch (e) {
-          console.warn("Audio analysis setup failed (likely muted track):", e);
-      }
-  };
-
-  // --- Signaling & Calls ---
-  const joinPresenceChannel = (myPeerId: string, stream: MediaStream) => {
-    const channel = supabase.channel(`vc:${channelId}`);
-    presenceChannelRef.current = channel;
-
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
-        const users = Object.values(state).flat() as any[];
-
-        users.forEach((u) => {
-           if (u.peerId !== myPeerId && !peers[u.peerId]) {
-               // Determistic call direction (alphabetical)
-               if (myPeerId > u.peerId) {
-                   const call = peerRef.current!.call(u.peerId, stream);
-                   handleCallStream(call, u.user_id, u.user_metadata);
-               }
-           }
-        });
-      })
-      .on('presence', { event: 'join' }, ({ newPresences }) => {
-          // Handle instant state updates (mute/video toggles)
-          newPresences.forEach((p: any) => {
-             if (peers[p.peerId]) {
-                 setPeers(prev => ({
-                     ...prev,
-                     [p.peerId]: { ...prev[p.peerId], isMuted: p.isMuted, isVideoOff: p.isVideoOff }
-                 }));
-             }
+  // --- 2. Cleanup ---
+  const cleanup = async () => {
+      // Clean DB
+      if (user) {
+          await supabase.from('active_voice_sessions').delete().match({ 
+              channel_id: channelId, 
+              user_id: user.id 
           });
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await updatePresence(myPeerId, !isMicOn, !isCameraOn);
-        }
-      });
-  };
-
-  const updatePresence = async (peerId: string, isMuted: boolean, isVideoOff: boolean) => {
-      if (!presenceChannelRef.current) return;
-      await presenceChannelRef.current.track({ 
-        user_id: user.id, 
-        peerId, 
-        user_metadata: user.user_metadata, // Send minimal metadata for display
-        isMuted, 
-        isVideoOff 
-      });
-  };
-
-  const handleCallStream = async (call: Peer.MediaConnection, userId?: string, metadata?: any) => {
-      const remotePeerId = call.peer;
-      // Robust splitting in case separators vary
-      const parts = remotePeerId.split('__');
-      const extractedUserId = userId || (parts.length > 0 ? parts[0] : 'unknown');
-
-      // 1. Initial State Placeholder
-      setPeers(prev => ({
-          ...prev,
-          [remotePeerId]: { 
-              peerId: remotePeerId, 
-              userId: extractedUserId, 
-              profile: metadata || { display_name: 'Loading...', username: '...', avatar_url: '' },
-              stream: undefined
-          }
-      }));
-
-      // 2. Robust Profile Fetching
-      // If we received metadata via presence sync, use it. Otherwise, fetch from DB.
-      if (!metadata) {
-          try {
-              const { data, error } = await supabase
-                  .from('profiles')
-                  .select('display_name, username, avatar_url')
-                  .eq('id', extractedUserId)
-                  .single();
-              
-              if (!error && data) {
-                  setPeers(prev => ({ 
-                      ...prev, 
-                      [remotePeerId]: { ...prev[remotePeerId], profile: data } 
-                  }));
-              } else {
-                  console.warn("Failed to fetch profile for", extractedUserId, error);
-              }
-          } catch (e) {
-              console.error("Profile fetch exception", e);
-          }
       }
+
+      channelRef.current?.unsubscribe();
+      peerRef.current?.destroy();
+      localStreamRef.current?.getTracks().forEach(t => t.stop());
+      if (audioContextRef.current) audioContextRef.current.close();
+  };
+
+  // --- 3. Signaling (Supabase Presence) ---
+  const joinPresenceChannel = (myPeerId: string, stream: MediaStream) => {
+      const channel = supabase.channel(`vc:${channelId}`, {
+          config: { presence: { key: myPeerId } }
+      });
+      channelRef.current = channel;
+
+      channel
+        .on('presence', { event: 'sync' }, () => {
+            const state = channel.presenceState();
+            const activeUsers = Object.values(state).flat() as any[];
+            
+            // Connect to users we aren't connected to yet
+            activeUsers.forEach(remoteUser => {
+                if (remoteUser.peerId !== myPeerId && !peersRef.current[remoteUser.peerId]) {
+                    // MESH NETWORK STRATEGY:
+                    // Only initiate call if My ID > Their ID. 
+                    // This prevents A calling B AND B calling A (duplicate connections).
+                    if (myPeerId > remoteUser.peerId) {
+                        console.log("Initiating call to:", remoteUser.peerId);
+                        const call = peerRef.current!.call(remoteUser.peerId, stream, {
+                            metadata: { 
+                                userId: user.id, 
+                                profile: user.user_metadata 
+                            }
+                        });
+                        handleCall(call, remoteUser);
+                    }
+                }
+            });
+        })
+        .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+            leftPresences.forEach((p: any) => removePeer(p.peerId));
+        })
+        .on('broadcast', { event: 'media_state' }, ({ payload }) => {
+            // Update mute/video state without reconnecting
+            setPeers(prev => ({
+                ...prev,
+                [payload.peerId]: { 
+                    ...prev[payload.peerId], 
+                    isMuted: payload.isMuted, 
+                    isVideoOff: payload.isVideoOff,
+                    isScreenSharing: payload.isScreenSharing
+                }
+            }));
+        })
+        .subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await channel.track({
+                    peerId: myPeerId,
+                    userId: user.id,
+                    profile: user.user_metadata,
+                    mediaState // Initial state
+                });
+            }
+        });
+  };
+
+  const broadcastMediaState = async (newState: typeof mediaState) => {
+      if (!channelRef.current || !localPeerId) return;
+      await channelRef.current.send({
+          type: 'broadcast',
+          event: 'media_state',
+          payload: {
+              peerId: localPeerId,
+              isMuted: !newState.mic,
+              isVideoOff: !newState.camera,
+              isScreenSharing: newState.screen
+          }
+      });
+  };
+
+  // --- 4. Call Handling ---
+  const handleCall = (call: Peer.MediaConnection, metadataHint?: any) => {
+      const remotePeerId = call.peer;
+      const metadata = call.metadata || metadataHint || {};
+
+      // Optimistic Add
+      addPeerToState(remotePeerId, metadata);
 
       call.on('stream', (remoteStream) => {
-          setPeers(prev => ({ ...prev, [remotePeerId]: { ...prev[remotePeerId], stream: remoteStream } }));
+          console.log("Received stream from:", remotePeerId);
+          updatePeerStream(remotePeerId, remoteStream);
           setupAudioAnalysis(remotePeerId, remoteStream);
       });
 
-      call.on('close', () => {
-          setPeers(prev => {
-              const newP = { ...prev };
-              delete newP[remotePeerId];
-              return newP;
-          });
-          sourceNodesRef.current.delete(remotePeerId);
+      call.on('close', () => removePeer(remotePeerId));
+      call.on('error', () => removePeer(remotePeerId));
+  };
+
+  const addPeerToState = async (id: string, metadata: any) => {
+      // If profile missing, fetch from DB using userId if available
+      let profile = metadata.profile;
+      const userId = metadata.userId;
+
+      if (!profile && userId) {
+          const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+          if (data) profile = data;
+      }
+
+      setPeers(prev => ({
+          ...prev,
+          [id]: {
+              peerId: id,
+              userId: userId || 'unknown',
+              profile: profile || { display_name: 'Unknown User', avatar_url: '' },
+              stream: undefined,
+              volume: 0,
+              isMuted: false,
+              isVideoOff: false
+          }
+      }));
+  };
+
+  const updatePeerStream = (id: string, stream: MediaStream) => {
+      setPeers(prev => {
+          if (!prev[id]) return prev;
+          return { ...prev, [id]: { ...prev[id], stream } };
       });
   };
 
-  // --- Media Toggles ---
+  const removePeer = (id: string) => {
+      setPeers(prev => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+      });
+  };
+
+  // --- 5. Media Controls ---
   const toggleMic = () => {
       if (!localStream) return;
       const track = localStream.getAudioTracks()[0];
-      track.enabled = !track.enabled;
-      setIsMicOn(track.enabled);
-      updatePresence(peerRef.current!.id, !track.enabled, !isCameraOn);
+      const enabled = !track.enabled;
+      track.enabled = enabled;
+      
+      const newState = { ...mediaState, mic: enabled };
+      setMediaState(newState);
+      broadcastMediaState(newState);
   };
 
   const toggleCamera = async () => {
       if (!localStream) return;
-
-      if (isCameraOn) {
-          // Turn Off
+      
+      if (mediaState.camera) {
+          // Stop Video
           localStream.getVideoTracks().forEach(t => {
               t.stop();
               localStream.removeTrack(t);
           });
-          setIsCameraOn(false);
-          updatePresence(peerRef.current!.id, !isMicOn, true);
+          const newState = { ...mediaState, camera: false, screen: false };
+          setMediaState(newState);
+          broadcastMediaState(newState);
       } else {
-          // Turn On
+          // Start Video
           try {
               const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
               const videoTrack = videoStream.getVideoTracks()[0];
-              
               localStream.addTrack(videoTrack);
-              setIsCameraOn(true);
-
-              // Update all connections
-              Object.values(peerRef.current?.connections || {}).forEach((conns: any) => {
-                   conns.forEach((conn: any) => {
-                       const sender = conn.peerConnection.getSenders().find((s: any) => s.track?.kind === 'video');
-                       if (sender) sender.replaceTrack(videoTrack);
-                       else conn.peerConnection.addTrack(videoTrack, localStream);
-                   });
-              });
-              updatePresence(peerRef.current!.id, !isMicOn, false);
-          } catch (e) { console.error("Video fail", e); }
+              
+              // Patch existing connections
+              replaceVideoTrack(videoTrack);
+              
+              const newState = { ...mediaState, camera: true, screen: false };
+              setMediaState(newState);
+              broadcastMediaState(newState);
+          } catch (e) {
+              addToast("Failed to access camera", "error");
+          }
       }
   };
 
-  const toggleScreenShare = async () => {
-      if (isScreenSharing) {
-          // Stop Sharing
-          localStream?.getVideoTracks().forEach(t => t.stop());
-          setIsScreenSharing(false);
-          if (isCameraOn) {
-              setIsCameraOn(false); // Reset camera toggle state for simplicity
-              setTimeout(toggleCamera, 100); // Restart camera
-          }
+  const toggleScreen = async () => {
+      if (!localStream) return;
+
+      if (mediaState.screen) {
+          // Stop Screen -> Revert to Camera if it was on, or just stop video
+          localStream.getVideoTracks().forEach(t => t.stop()); // Stop screen track
+          const newState = { ...mediaState, screen: false, camera: false }; // Simplified logic: turning off screen turns off video
+          setMediaState(newState);
+          broadcastMediaState(newState);
       } else {
-          // Start Sharing
           try {
               const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
               const screenTrack = displayStream.getVideoTracks()[0];
-              screenTrack.onended = () => toggleScreenShare(); // Handle UI stop
-
-              // Replace track
-              const oldVideo = localStream?.getVideoTracks()[0];
-              if (oldVideo) oldVideo.stop();
               
-              // Add or replace in stream
-              if (localStream) {
-                  const newStream = new MediaStream([localStream.getAudioTracks()[0], screenTrack]);
-                  setLocalStream(newStream);
-                  localStreamRef.current = newStream; // Update ref for new connections
+              // Auto-handle native stop button
+              screenTrack.onended = () => {
+                  const newState = { ...mediaState, screen: false, camera: false };
+                  setMediaState(newState);
+                  broadcastMediaState(newState);
+              };
+
+              // Replace current video track
+              const oldTrack = localStream.getVideoTracks()[0];
+              if (oldTrack) {
+                  oldTrack.stop();
+                  localStream.removeTrack(oldTrack);
               }
-
-              // Update Peers
-              Object.values(peerRef.current?.connections || {}).forEach((conns: any) => {
-                  conns.forEach((conn: any) => {
-                      const sender = conn.peerConnection.getSenders().find((s: any) => s.track?.kind === 'video');
-                      if (sender) sender.replaceTrack(screenTrack);
-                      else conn.peerConnection.addTrack(screenTrack, localStream!);
-                  });
-              });
+              localStream.addTrack(screenTrack);
               
-              setIsScreenSharing(true);
-          } catch (e) { console.error("Screen share fail", e); }
+              replaceVideoTrack(screenTrack);
+
+              const newState = { ...mediaState, screen: true, camera: false };
+              setMediaState(newState);
+              broadcastMediaState(newState);
+          } catch (e) {
+              addToast("Screen sharing cancelled", "info");
+          }
       }
   };
 
-  const toggleBrowserFullScreen = () => {
-      if (!containerRef.current) return;
+  const replaceVideoTrack = (newTrack: MediaStreamTrack) => {
+      Object.values(peerRef.current?.connections || {}).forEach((conns: any) => {
+          conns.forEach((conn: any) => {
+              const sender = conn.peerConnection.getSenders().find((s: any) => s.track?.kind === 'video');
+              if (sender) sender.replaceTrack(newTrack);
+              else conn.peerConnection.addTrack(newTrack, localStream);
+          });
+      });
+  };
+
+  const setupAudioAnalysis = (id: string, stream: MediaStream) => {
+      if (!audioContextRef.current) audioContextRef.current = new AudioContext();
+      try {
+          const source = audioContextRef.current.createMediaStreamSource(stream);
+          const analyser = audioContextRef.current.createAnalyser();
+          analyser.fftSize = 32;
+          source.connect(analyser);
+          
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          const checkVolume = () => {
+              if (peersRef.current[id] || id === 'local') {
+                  analyser.getByteFrequencyData(dataArray);
+                  const vol = dataArray.reduce((a,b) => a+b) / dataArray.length;
+                  
+                  if (id === 'local') {
+                      // Update local volume? Optional.
+                  } else {
+                      setPeers(prev => prev[id] ? ({ ...prev, [id]: { ...prev[id], volume: vol } }) : prev);
+                  }
+                  requestAnimationFrame(checkVolume);
+              }
+          };
+          checkVolume();
+      } catch (e) {
+          // Often fails if track is muted initially, harmless
+      }
+  };
+
+  // --- Render Helpers ---
+  const toggleFullscreen = () => {
       if (!document.fullscreenElement) {
-          containerRef.current.requestFullscreen();
-          setIsFullScreenMode(true);
+          containerRef.current?.requestFullscreen();
+          setIsFullScreen(true);
       } else {
           document.exitFullscreen();
-          setIsFullScreenMode(false);
+          setIsFullScreen(false);
       }
   };
 
-  // --- Renders ---
+  // Prepare participants list
+  const participants = [
+      {
+          peerId: 'local',
+          userId: user.id,
+          stream: localStream || undefined,
+          profile: { 
+              display_name: 'You', 
+              avatar_url: user.user_metadata.avatar_url, 
+              username: user.user_metadata.username 
+          },
+          isMuted: !mediaState.mic,
+          isVideoOff: !mediaState.camera && !mediaState.screen,
+          volume: 0 // Local visualizer usually distracting
+      },
+      ...Object.values(peers)
+  ];
 
-  // 1. Minimized "PiP" Mode
+  // Minimized View
   if (isMinimized) {
       return (
-          <div className="fixed bottom-20 right-4 w-72 bg-[rgb(var(--color-surface))] border border-[rgb(var(--color-border))] rounded-xl shadow-2xl overflow-hidden z-[60] animate-in slide-in-from-bottom-10">
-              <div className="bg-green-500 p-2 flex justify-between items-center text-white">
+          <div className="fixed bottom-20 right-4 w-64 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-[60] animate-in slide-in-from-bottom-5">
+              <div className="bg-green-600 p-2 flex justify-between items-center text-white">
                   <span className="font-bold text-xs flex items-center gap-2 truncate">
                       <Volume2 size={14}/> {channelName}
                   </span>
-                  <div className="flex gap-2">
-                    <button onClick={onToggleMinimize} className="hover:bg-green-600 p-1 rounded"><Maximize2 size={14}/></button>
-                    <button onClick={onDisconnect} className="hover:bg-red-600 p-1 rounded"><PhoneOff size={14}/></button>
+                  <div className="flex gap-1">
+                      <button onClick={onToggleMinimize}><Maximize2 size={14}/></button>
+                      <button onClick={onDisconnect} className="hover:text-red-200"><X size={14}/></button>
                   </div>
               </div>
-              
-              <div className="grid grid-cols-3 gap-1 p-2 bg-black/90 max-h-48 overflow-y-auto">
-                  {/* Self */}
-                  <div className="relative aspect-square rounded bg-gray-700 overflow-hidden border border-gray-600">
-                      <img src={user.user_metadata.avatar_url} className="w-full h-full object-cover opacity-50" />
-                      <div className="absolute inset-0 flex items-center justify-center text-white text-[10px] font-bold">You</div>
-                      {!isMicOn && <div className="absolute top-1 right-1 bg-red-500 rounded-full p-0.5"><MicOff size={8} className="text-white"/></div>}
-                  </div>
-                  {/* Peers */}
-                  {Object.values(peers).map(p => (
-                      <div key={p.peerId} className={`relative aspect-square rounded bg-gray-700 overflow-hidden border ${volumeMap[p.peerId] > 20 ? 'border-green-500' : 'border-gray-600'}`}>
-                          {p.stream && p.stream.getVideoTracks().length > 0 && p.stream.getVideoTracks()[0].enabled ? (
-                              <video ref={el => {if(el) el.srcObject = p.stream!}} autoPlay playsInline muted className="w-full h-full object-cover" />
+              <div className="p-2 grid grid-cols-3 gap-1 max-h-40 overflow-y-auto">
+                  {participants.map(p => (
+                      <div key={p.peerId} className={`aspect-square bg-gray-800 rounded relative overflow-hidden ${p.volume > 20 ? 'border border-green-500' : ''}`}>
+                          {p.stream && !p.isVideoOff ? (
+                             <video 
+                                ref={el => {if(el && p.stream) el.srcObject = p.stream}} 
+                                autoPlay muted playsInline 
+                                className="w-full h-full object-cover" 
+                             />
                           ) : (
-                              <img src={p.profile?.avatar_url} className="w-full h-full object-cover opacity-50" />
+                             <img src={p.profile?.avatar_url} className="w-full h-full object-cover opacity-50"/>
                           )}
-                          {p.isMuted && <div className="absolute top-1 right-1 bg-red-500 rounded-full p-0.5"><MicOff size={8} className="text-white"/></div>}
+                          <div className="absolute bottom-0 inset-x-0 text-[8px] text-white bg-black/50 truncate px-1">{p.profile?.display_name}</div>
                       </div>
                   ))}
               </div>
@@ -506,126 +543,75 @@ export const GazeboVC: React.FC<GazeboVCProps> = ({
       );
   }
 
-  // 2. Full Screen / Standard Mode
-  const participants = [
-      { 
-          peerId: 'local', 
-          userId: user.id, 
-          stream: localStream || undefined, 
-          profile: { ...user.user_metadata, display_name: 'You' }, 
-          isMuted: !isMicOn,
-          isVideoOff: !isCameraOn,
-          volume: 0 
-      },
-      ...Object.values(peers).map(p => ({...p, volume: volumeMap[p.peerId] || 0}))
-  ];
-
-  // Dynamic Grid Calc
-  const getGridClass = (count: number) => {
-      if (focusedPeerId) return 'grid-cols-1';
-      if (count === 1) return 'grid-cols-1 max-w-3xl mx-auto w-full';
-      if (count === 2) return 'grid-cols-1 md:grid-cols-2';
-      if (count <= 4) return 'grid-cols-2';
-      if (count <= 9) return 'grid-cols-2 md:grid-cols-3';
-      return 'grid-cols-3 md:grid-cols-4';
-  };
-
+  // Full View
   return (
-    <div ref={containerRef} className={`fixed inset-0 z-50 bg-black flex flex-col ${!isFullScreenMode && 'top-0'}`}>
-        
+    <div ref={containerRef} className="fixed inset-0 z-50 bg-gray-900 text-white flex flex-col">
         {/* Header */}
-        <div className="absolute top-0 left-0 right-0 p-4 z-20 flex justify-between items-start bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
-             <div className="pointer-events-auto">
-                 <h2 className="text-white font-bold text-xl flex items-center gap-2">
-                     <Volume2 className="text-green-400" /> {channelName}
+        <div className="h-16 flex items-center justify-between px-6 bg-gray-800/50 backdrop-blur border-b border-gray-700 shrink-0">
+             <div>
+                 <h2 className="font-bold text-lg flex items-center gap-2">
+                     <Volume2 className="text-green-500"/> {channelName}
                  </h2>
-                 <div className="flex items-center gap-2 text-white/60 text-sm mt-1">
-                     <span className="flex items-center gap-1"><Users size={12}/> {participants.length} Connected</span>
-                 </div>
+                 <p className="text-xs text-gray-400">{participants.length} Active</p>
              </div>
-             <div className="pointer-events-auto flex gap-2">
-                 <button onClick={toggleBrowserFullScreen} className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition">
-                     {isFullScreenMode ? <Shrink size={20}/> : <Expand size={20}/>}
-                 </button>
-                 <button onClick={onToggleMinimize} className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition">
-                     <Minimize2 size={20} />
-                 </button>
+             <div className="flex gap-2">
+                 <button onClick={toggleFullscreen} className="p-2 hover:bg-gray-700 rounded-full"><Expand size={20}/></button>
+                 <button onClick={onToggleMinimize} className="p-2 hover:bg-gray-700 rounded-full"><Minimize2 size={20}/></button>
              </div>
         </div>
 
-        {/* Main Grid */}
-        <div className="flex-1 overflow-y-auto p-4 flex items-center justify-center custom-scrollbar">
-            {/* Optimization: For > 12 users, force smaller grid items to prevent overflow issues */}
-            <div className={`grid gap-4 w-full transition-all duration-500 ${participants.length > 12 ? 'grid-cols-4 md:grid-cols-5 lg:grid-cols-6 auto-rows-[150px]' : getGridClass(participants.length)} ${focusedPeerId ? 'h-full' : 'auto-rows-fr'}`}>
-                {participants.map(p => {
-                    const isFocused = focusedPeerId === p.peerId;
-                    if (focusedPeerId && !isFocused) return null;
-
-                    return (
-                        <VideoTile 
+        {/* Video Grid */}
+        <div className="flex-1 overflow-y-auto p-4 flex items-center justify-center">
+             <div className={`
+                 grid gap-4 w-full max-w-7xl transition-all duration-500
+                 ${focusedPeerId ? 'grid-cols-1 h-full' : ''}
+                 ${!focusedPeerId && participants.length === 1 ? 'grid-cols-1 max-w-3xl' : ''}
+                 ${!focusedPeerId && participants.length === 2 ? 'grid-cols-1 md:grid-cols-2' : ''}
+                 ${!focusedPeerId && participants.length > 2 ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : ''}
+                 auto-rows-fr
+             `}>
+                 {participants.map(p => {
+                     if (focusedPeerId && p.peerId !== focusedPeerId) return null;
+                     
+                     return (
+                         <VideoTile 
                             key={p.peerId}
-                            peerId={p.peerId}
-                            userId={p.userId}
-                            stream={p.stream}
-                            profile={p.profile}
-                            isMuted={p.isMuted}
-                            volume={p.volume}
-                            isFocused={isFocused}
-                            onToggleFocus={() => setFocusedPeerId(isFocused ? null : p.peerId)}
-                        />
-                    );
-                })}
-            </div>
+                            peer={p}
+                            isFocused={focusedPeerId === p.peerId}
+                            onToggleFocus={() => setFocusedPeerId(focusedPeerId ? null : p.peerId)}
+                         />
+                     );
+                 })}
+             </div>
         </div>
 
-        {/* Bottom Control Bar */}
-        <div className="h-20 bg-[rgb(var(--color-surface))] border-t border-[rgb(var(--color-border))] flex items-center justify-center gap-4 px-8 shrink-0 z-30 pb-safe">
-            <button 
-                onClick={toggleMic}
-                className={`p-4 rounded-full transition-all duration-200 hover:scale-105 ${isMicOn ? 'bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text))]' : 'bg-red-500 text-white shadow-lg shadow-red-500/40'}`}
-                title={isMicOn ? "Mute" : "Unmute"}
-            >
-                {isMicOn ? <Mic size={24} /> : <MicOff size={24} />}
-            </button>
-            
-            <button 
-                onClick={toggleCamera}
-                className={`p-4 rounded-full transition-all duration-200 hover:scale-105 ${isCameraOn ? 'bg-white text-black shadow-lg' : 'bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text))]'}`}
-                title="Toggle Camera"
-            >
-                {isCameraOn ? <Video size={24} /> : <VideoOff size={24} />}
-            </button>
+        {/* Controls */}
+        <div className="h-24 bg-gray-800 flex items-center justify-center gap-6 shrink-0 pb-safe">
+             <button onClick={toggleMic} className={`p-4 rounded-full ${mediaState.mic ? 'bg-gray-700 hover:bg-gray-600' : 'bg-red-500 text-white'}`}>
+                 {mediaState.mic ? <Mic size={24}/> : <MicOff size={24}/>}
+             </button>
+             
+             <button onClick={toggleCamera} className={`p-4 rounded-full ${mediaState.camera ? 'bg-white text-black' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                 {mediaState.camera ? <Video size={24}/> : <VideoOff size={24}/>}
+             </button>
+             
+             <button onClick={toggleScreen} className={`p-4 rounded-full ${mediaState.screen ? 'bg-green-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                 <Monitor size={24}/>
+             </button>
 
-            <button 
-                onClick={toggleScreenShare}
-                className={`p-4 rounded-full transition-all duration-200 hover:scale-105 ${isScreenSharing ? 'bg-green-500 text-white shadow-lg shadow-green-500/40' : 'bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text))]'}`}
-                title="Share Screen"
-            >
-                <Monitor size={24} />
-            </button>
-
-            <div className="w-px h-8 bg-[rgb(var(--color-border))] mx-2" />
-
-            <button 
-                onClick={onDisconnect}
-                className="px-8 py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-bold shadow-lg hover:shadow-red-600/20 transition-all duration-200 flex items-center gap-2"
-            >
-                <PhoneOff size={20} />
-                <span className="hidden md:inline">Disconnect</span>
-            </button>
+             <div className="w-px h-10 bg-gray-700 mx-2"/>
+             
+             <button onClick={onDisconnect} className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-full font-bold flex items-center gap-2">
+                 <PhoneOff size={20}/> End
+             </button>
         </div>
 
-        {/* TOAST NOTIFICATIONS */}
-        <div className="fixed bottom-24 right-4 z-[70] flex flex-col gap-2 pointer-events-none">
-            {toasts.map(toast => (
-                <div 
-                    key={toast.id}
-                    className={`
-                        px-4 py-2 rounded-lg shadow-lg text-white text-sm font-medium animate-in slide-in-from-right fade-in duration-300
-                        ${toast.type === 'error' ? 'bg-red-500' : toast.type === 'success' ? 'bg-green-500' : 'bg-gray-800'}
-                    `}
-                >
-                    {toast.message}
+        {/* Floating Toasts */}
+        <div className="fixed bottom-28 right-6 flex flex-col gap-2 z-[70] pointer-events-none">
+            {toasts.map(t => (
+                <div key={t.id} className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium animate-in slide-in-from-right fade-in ${t.type === 'error' ? 'bg-red-500' : t.type === 'success' ? 'bg-green-600' : 'bg-gray-700'}`}>
+                    {t.type === 'error' && <AlertCircle size={16}/>}
+                    {t.message}
                 </div>
             ))}
         </div>
