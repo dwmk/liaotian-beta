@@ -204,7 +204,9 @@ export const Messages = ({
   const [mediaInputMode, setMediaInputMode] = useState<'file' | 'url' | null>(null);
 
   const [reactionMenu, setReactionMenu] = useState<{ messageId: string, x: number, y: number, isOutgoing: boolean } | null>(null);
-
+  // NEW: State to control the "Who Reacted" modal
+  const [viewingReactionsFor, setViewingReactionsFor] = useState<AppMessage | null>(null);
+  
   const { user } = useAuth();
 
   const handleReaction = useCallback(async (messageId: string, emoji: string) => {
@@ -619,10 +621,16 @@ export const Messages = ({
     setHasMoreMessages(true);
     setIsLoadingMore(false);
 
-    // UPDATED: Fetch all fields (*) and join reactions + their profiles
+    // FIX: Explicitly select reactions and the profile of the reactor
     const { data: messagesData, count } = await supabase
       .from('messages')
-      .select('id, sender_id, recipient_id, content, created_at, media_url, media_type, read, reply_to_id', { count: 'exact' })
+      .select(`
+        id, sender_id, recipient_id, content, created_at, media_url, media_type, read, reply_to_id,
+        reactions:message_reactions(
+          id, emoji, user_id,
+          profiles(id, username, display_name, avatar_url)
+        )
+      `, { count: 'exact' })
       .or(
         `and(sender_id.eq.${user!.id},recipient_id.eq.${recipientId}),and(sender_id.eq.${recipientId},recipient_id.eq.${user!.id})`
       )
@@ -676,10 +684,16 @@ export const Messages = ({
     const container = messagesContainerRef.current;
     const oldScrollHeight = container?.scrollHeight;
 
-    // UPDATED: Fetch all fields (*) and join reactions + their profiles
+    // FIX: Explicitly select reactions and the profile of the reactor for pagination too
     const { data: messagesData, count } = await supabase
       .from('messages')
-      .select('id, sender_id, recipient_id, content, created_at, media_url, media_type, read, reply_to_id', { count: 'exact' })
+      .select(`
+        id, sender_id, recipient_id, content, created_at, media_url, media_type, read, reply_to_id,
+        reactions:message_reactions(
+          id, emoji, user_id,
+          profiles(id, username, display_name, avatar_url)
+        )
+      `, { count: 'exact' })
       .or(
         `and(sender_id.eq.${user!.id},recipient_id.eq.${selectedUser.id}),and(sender_id.eq.${selectedUser.id},recipient_id.eq.${user!.id})`
       )
@@ -907,7 +921,7 @@ export const Messages = ({
         <Calls />
       </Suspense>
       
-      {/* Reaction Menu Overlay */}
+      {/* Reaction Menu Overlay (For adding new reactions) */}
       {reactionMenu && (
         <div 
             className="fixed inset-0 z-50 pointer-events-none"
@@ -919,7 +933,7 @@ export const Messages = ({
                 style={{ 
                     top: reactionMenu.y, 
                     left: reactionMenu.isOutgoing 
-                        ? reactionMenu.x - (reactionMenu.x > window.innerWidth / 2 ? 160 : 0) // Position based on outgoing
+                        ? reactionMenu.x - (reactionMenu.x > window.innerWidth / 2 ? 160 : 0) 
                         : reactionMenu.x
                 }}
                 onClick={e => e.stopPropagation()} 
@@ -929,7 +943,6 @@ export const Messages = ({
                         key={emoji}
                         onClick={() => handleReaction(reactionMenu.messageId, emoji)}
                         className="text-2xl p-2 rounded-lg hover:bg-[rgb(var(--color-surface-hover))] transition"
-                        title={`React with ${emoji}`}
                     >
                         {emoji}
                     </button>
@@ -937,6 +950,65 @@ export const Messages = ({
             </div>
         </div>
       )}
+
+      {/* NEW: Reaction Details Modal (Who reacted list) */}
+      {viewingReactionsFor && (
+        <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm p-4"
+            onClick={() => setViewingReactionsFor(null)}
+        >
+            <div 
+                className="bg-[rgb(var(--color-surface))] w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden border border-[rgb(var(--color-border))]"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="p-4 border-b border-[rgb(var(--color-border))] flex justify-between items-center">
+                    <h3 className="font-bold text-[rgb(var(--color-text))]">Reactions</h3>
+                    <button 
+                        onClick={() => setViewingReactionsFor(null)}
+                        className="p-1 rounded-full hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]"
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
+                
+                <div className="max-h-[60vh] overflow-y-auto">
+                    {/* Render message snippet for context */}
+                    <div className="p-3 bg-[rgb(var(--color-surface-hover))] text-sm text-[rgb(var(--color-text-secondary))] truncate mx-4 mt-4 rounded-lg border border-[rgb(var(--color-border))] opacity-70">
+                         {viewingReactionsFor.content || (viewingReactionsFor.media_type ? `[${viewingReactionsFor.media_type}]` : 'Message')}
+                    </div>
+
+                    <div className="p-2">
+                        {/* We flatten all reactions into a single list for the modal */}
+                        {viewingReactionsFor.reactions?.map(r => (
+                            <div key={r.id} className="flex items-center gap-3 p-3 hover:bg-[rgb(var(--color-surface-hover))] rounded-xl transition">
+                                <div className="relative">
+                                    <img 
+                                        src={r.profiles?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.profiles?.username}`} 
+                                        alt={r.profiles?.username}
+                                        className="w-10 h-10 rounded-full object-cover bg-[rgb(var(--color-background))]" 
+                                    />
+                                    <div className="absolute -bottom-1 -right-1 text-lg leading-none drop-shadow-sm">
+                                        {r.emoji}
+                                    </div>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="font-semibold text-[rgb(var(--color-text))] flex items-center gap-1">
+                                        {r.profiles?.display_name || 'Unknown User'}
+                                        {r.user_id === user?.id && <span className="text-xs text-[rgb(var(--color-text-secondary))] font-normal">(You)</span>}
+                                    </div>
+                                    <div className="text-xs text-[rgb(var(--color-text-secondary))]">
+                                        @{r.profiles?.username}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* SIDEBAR */}
       
       {/* SIDEBAR */}
       <div className={`w-full md:w-96 bg-[rgb(var(--color-surface))] border-r border-[rgb(var(--color-border))] flex-shrink-0 flex flex-col transition-transform duration-300 ease-in-out ${showSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} md:relative fixed inset-y-0 left-0 z-40 md:z-auto`}>
@@ -1210,14 +1282,17 @@ export const Messages = ({
                       )}
                     </div>
 
-                     {/* Reactions Display */}
+                 {/* Reactions Display */}
                      {msg.reactions && msg.reactions.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2 -ml-1">
                             {groupReactions(msg.reactions, user!.id).map(reaction => (
                                 <button
                                     key={reaction.emoji}
-                                    onClick={() => handleReaction(msg.id, reaction.emoji)}
-                                    title={`Reacted by: ${reaction.userProfiles.map(p => p.display_name || 'User').join(', ')}`}
+                                    // CHANGE: OnClick now opens the modal (setViewingReactionsFor) instead of toggling immediate reaction
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setViewingReactionsFor(msg);
+                                    }}
                                     className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] border transition ${
                                         reaction.hasReacted 
                                             ? msg.sender_id === user!.id 
