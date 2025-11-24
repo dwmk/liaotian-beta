@@ -319,6 +319,9 @@ export const PostItem: React.FC<PostItemProps> = ({
 
   const isAuthor = currentUserId === post.user_id;
 
+  // Type helper to access groups safely without changing global types immediately
+  const groupData = (post as any).groups;
+
   return (
     <>
       <div className="border-b border-[rgb(var(--color-border))] p-4 hover:bg-[rgb(var(--color-surface-hover))] transition bg-[rgb(var(--color-surface))]">
