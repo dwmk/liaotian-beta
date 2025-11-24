@@ -9,7 +9,7 @@ import { Search } from './components/Search';
 import { Settings } from './components/Settings';
 import { CustomPage } from './components/CustomPage';
 import { Stats } from './components/Stats';
-import { Status } from './components/Status';
+import { Status, StatusArchive } from './components/Status';
 import { Sidebar } from './components/Sidebar';
 import { Notifications } from './components/Notifications'; 
 import { Home, MessageSquare, User, LogOut, Search as SearchIcon, Bell } from 'lucide-react';
@@ -347,26 +347,12 @@ const Main = () => {
   if (!user || !profile) {
     if (view === 'profile' && selectedProfileId) {
       return (
-	    <div className="min-h-screen bg-[rgb(var(--color-background))]">
-	      {/* 4a. RENDER SIDEBAR */}
-	      <Sidebar 
-	        show={showSidebar} 
-	        onClose={() => setShowSidebar(false)} 
-	        setView={setView} 
-	        view={view} 
-	      />
-	
-	      <nav className="bg-[rgb(var(--color-surface))] border-b border-[rgb(var(--color-border))] sticky top-0 z-50 shadow-sm">
-	        <div className="max-w-6xl mx-auto flex items-center justify-between px-4 h-14">
-	          {/* 4b. UPDATE LOGO ONCLICK */}
-	          <svg 
-	            xmlns="http://www.w3.org/2000/svg" 
-	            viewBox={SVG_VIEWBOX} 
-	            className="w-[32px] h-[32px] cursor-pointer" 
-	            onClick={() => setShowSidebar(true)} 
-	          >
-	            <path d={SVG_PATH} fill="rgb(var(--color-primary))" />
-	          </svg>
+	     <div className="min-h-screen bg-[rgb(var(--color-background))]">
+          <div className="bg-[rgb(var(--color-surface))] border-b border-[rgb(var(--color-border))] sticky top-0 z-50 shadow-sm">
+            <div className="max-w-6xl mx-auto flex items-center justify-between px-4 h-14">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox={SVG_VIEWBOX} className="w-[32px] h-[32px] cursor-pointer" onClick={() => navigate('/')}>
+                <path d={SVG_PATH} fill="rgb(var(--color-primary))" />
+              </svg>
               <a href="/" className="text-[rgb(var(--color-primary))] hover:text-[rgba(var(--color-primary),0.8)] font-bold">← Back to Home</a>
             </div>
           </div>
@@ -475,12 +461,7 @@ const handleMessageUser = (targetProfile: any) => {
         {showNotifications && <Notifications onClose={() => setShowNotifications(false)} />}
         {showSearch && <Search onClose={() => setShowSearch(false)} />}
         {view === 'stats' && user && <Stats />}
-		{view === 'archive' && (
-          <div className="p-4 text-center text-[rgb(var(--color-text-secondary))]">
-             {/* Replace this with your actual <Archive /> component when ready */}
-             Status Archive (Coming Soon)
-          </div>
-        )}
+		{view === 'archive' && <StatusArchive />}
       </main>
       {view !== 'messages' && (
         <footer className="text-center text-[rgb(var(--color-text-secondary))] text-xs py-4 border-t border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))]">
