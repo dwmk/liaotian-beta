@@ -12,6 +12,8 @@ import {
   Check,     // For "Sent"
   RefreshCcw, // For flipping camera
   Eye,       // For view count
+  Gift,      // For GIF mode
+  Search,    // For GIF search
 } from 'lucide-react';
 import { ProfileWithStatus } from '../lib/types'; 
 
@@ -263,21 +265,47 @@ export const StatusTray: React.FC = () => {
 //  Massively upgraded with Camera and Video recording.
 //  UPDATED: Added logic to dispatch upload progress events.
 // =======================================================================
-type CreatorMode = 'upload' | 'camera' | 'video';
+type CreatorMode = 'upload' | 'camera' | 'video' | 'gif'; // ADDED 'gif'
 
 const StatusCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { user } = useAuth();
   
   // Media State
   const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [remoteMediaUrl, setRemoteMediaUrl] = useState<string | null>(null); // ADDED: For GIFs/Remote
   const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string>('');
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
   const [textOverlay, setTextOverlay] = useState('');
   
   // UI State
   const [isPosting, setIsPosting] = useState(false);
-  const [mode, setMode] = useState<CreatorMode>('camera'); // Default to camera
+  const [mode, setMode] = useState<CreatorMode>('camera'); 
   const [isRecording, setIsRecording] = useState(false);
+
+  // GIF State
+  const [gifQuery, setGifQuery] = useState('');
+  const [gifs, setGifs] = useState<any[]>([]);
+
+  // TENOR API SEARCH
+  const searchGifs = async (query: string = '') => {
+      const apiKey = import.meta.env.VITE_TENOR_API_KEY;
+      if (!apiKey) return;
+      const searchUrl = query 
+        ? `https://tenor.googleapis.com/v2/search?q=${query}&key=${apiKey}&client_key=gazebo_app&limit=12&media_filter=minimal`
+        : `https://tenor.googleapis.com/v2/featured?key=${apiKey}&client_key=gazebo_app&limit=12&media_filter=minimal`;
+      
+      try {
+          const res = await fetch(searchUrl);
+          const data = await res.json();
+          setGifs(data.results || []);
+      } catch (e) {
+          console.error("Tenor Error", e);
+      }
+  };
+
+  useEffect(() => {
+    if (mode === 'gif') searchGifs(gifQuery);
+  }, [mode, gifQuery]);
   
   // Camera/Mic Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -427,64 +455,67 @@ const StatusCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   };
 
   // --- Posting Logic ---
-
   const handlePost = async () => {
-    if (!user || !mediaFile) return;
+    // Check for either File OR Remote URL
+    if (!user || (!mediaFile && !remoteMediaUrl)) return;
 
     setIsPosting(true);
-
-    // --- ADDED: MOCK UPLOAD PROGRESS DISPATCHER ---
+    // Dispatch start
     window.dispatchEvent(new CustomEvent('statusUploadProgress', { detail: { progress: 1 } }));
     let progress = 1;
 
-    // Simulate file upload progress with an async loop
+    // Simulate progress
     const mockProgress = () => {
-        progress = Math.min(progress + 10, 95); // Stop before 99% for DB write
+        progress = Math.min(progress + 10, 95); 
         window.dispatchEvent(new CustomEvent('statusUploadProgress', { detail: { progress: progress } }));
         if (progress < 95) {
             setTimeout(mockProgress, 300);
         }
     };
     const progressTimeout = setTimeout(mockProgress, 300);
-    // ------------------------------------------------
 
     try {
-      const uploadResult = await uploadStatusMedia(mediaFile);
+      let finalMediaUrl = remoteMediaUrl;
+
+      // Only upload if we have a file
+      if (mediaFile) {
+          const uploadResult = await uploadStatusMedia(mediaFile);
+          if (!uploadResult) throw new Error('Upload failed.');
+          finalMediaUrl = uploadResult.url;
+      }
       
-      // Stop mock progress, set to 99% before final DB write
+      if (!finalMediaUrl) throw new Error('No media URL generated.');
+
+      // Stop mock progress
       clearTimeout(progressTimeout); 
       progress = 99;
       window.dispatchEvent(new CustomEvent('statusUploadProgress', { detail: { progress: progress } }));
 
-      if (!uploadResult) throw new Error('Upload failed.');
-
-      // --- FIX: Add expires_at timestamp (24 hours from now) ---
+      // Expiry: 24 hours
       const expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
       await supabase
         .from('statuses')
         .insert({
           user_id: user.id,
-          media_url: uploadResult.url,
+          media_url: finalMediaUrl,
           media_type: mediaType,
           text_overlay: textOverlay ? { 
             text: textOverlay, 
+            // UPDATED: Default position to bottom (Caption style)
             x: 50, 
-            y: 50, 
+            y: 80, 
             color: 'white',
             fontSize: 24
           } : {},
-          expires_at: expires_at // <-- ADDED
+          expires_at: expires_at
         });
       
-      // Dispatch Complete Progress (100%)
       window.dispatchEvent(new CustomEvent('statusUploadProgress', { detail: { progress: 100 } }));
-      
-      onClose(); // Success
+      onClose();
     } catch (error) {
       console.error('Error posting status:', error);
-      alert('Failed to post status. Please try again.');
-      // Dispatch Error/Reset Progress (null)
+      alert('Failed to post status.');
       window.dispatchEvent(new CustomEvent('statusUploadProgress', { detail: { progress: null } }));
     } finally {
       setIsPosting(false);
@@ -493,134 +524,197 @@ const StatusCreator: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   const reset = () => {
     setMediaFile(null);
+    setRemoteMediaUrl(null);
     setMediaPreviewUrl('');
     setTextOverlay('');
-    startCamera(); // Go back to camera mode
+    setGifQuery(''); // Reset query
+    if (mode === 'gif') searchGifs(''); // Reset GIF grid
+    startCamera();
   };
 
   // --- Render ---
 
+ const hasMedia = !!(mediaFile || remoteMediaUrl);
+
   return (
     <div className="fixed inset-0 z-[1000] bg-black flex items-center justify-center">
-      <canvas ref={canvasRef} className="hidden" /> {/* Hidden canvas for photos */}
+      <canvas ref={canvasRef} className="hidden" />
       
-      <div className="relative w-full h-full max-w-lg max-h-screen bg-black rounded-lg overflow-hidden">
+      <div className="relative w-full h-full max-w-lg max-h-screen bg-black rounded-lg overflow-hidden flex flex-col">
         
         {/* Header Bar */}
-        <div className="absolute top-0 left-0 w-full p-4 z-20 flex justify-between items-center">
+        <div className="absolute top-0 left-0 w-full p-4 z-20 flex justify-between items-center bg-gradient-to-b from-black/50 to-transparent">
           <button 
-            onClick={mediaFile ? reset : onClose} 
-            className="p-2 bg-black/50 rounded-full text-white"
+            onClick={hasMedia ? reset : onClose} 
+            className="p-2 bg-black/50 rounded-full text-white backdrop-blur-md"
           >
             <X size={24} />
           </button>
           
-          {mediaFile && (
+          {hasMedia && (
              <button 
               onClick={handlePost}
               disabled={isPosting}
-              className="px-4 py-2 bg-[rgb(var(--color-primary))] text-[rgb(var(--color-text-on-primary))] rounded-full font-bold text-sm flex items-center gap-2 disabled:opacity-50"
+              className="px-4 py-2 bg-[rgb(var(--color-primary))] text-[rgb(var(--color-text-on-primary))] rounded-full font-bold text-sm flex items-center gap-2 disabled:opacity-50 shadow-lg"
             >
-              {isPosting ? 'Posting...' : 'Post Status'}
+              {isPosting ? 'Posting...' : 'Share'}
               {!isPosting && <Send size={16} />}
             </button>
           )}
         </div>
 
-        {/* Media Preview (when file exists) */}
-        {mediaFile && (
-          <div className="absolute inset-0 w-full h-full flex items-center justify-center z-10">
-            {mediaType === 'image' && (
-              <img src={mediaPreviewUrl} className="max-w-full max-h-full object-contain" alt="Preview" />
-            )}
-            {mediaType === 'video' && (
-              <video src={mediaPreviewUrl} className="max-w-full max-h-full" autoPlay muted loop playsInline />
-            )}
-            <div className="absolute w-full p-4 flex items-center justify-center pointer-events-none">
-              <input
-                type="text"
-                value={textOverlay}
-                onChange={(e) => setTextOverlay(e.target.value)}
-                placeholder="Add text..."
-                className="w-full text-center bg-black/60 text-white text-2xl font-bold p-2 outline-none border-none pointer-events-auto"
-                style={{ textShadow: '0px 0px 8px rgba(0,0,0,0.7)' }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Camera / Upload UI (no file yet) */}
-        {!mediaFile && (
-          <div className="w-full h-full flex flex-col items-center justify-center z-0">
-            {/* Camera View */}
-            {(mode === 'camera' || mode === 'video') && (
-               <video 
-                ref={videoRef} 
-                autoPlay 
-                playsInline 
-                muted 
-                className="w-full h-full object-cover" 
-               />
-            )}
+        {/* --- MAIN CONTENT AREA --- */}
+        <div className="flex-1 relative w-full h-full overflow-hidden bg-[#1a1a1a]">
             
-            {/* Upload View */}
-            {mode === 'upload' && (
-                 <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-4">
-                    <h2 className="text-2xl font-bold text-white">Upload a Status</h2>
-                    <p className="text-gray-400 text-center">Upload an image or a video from your device.</p>
-                    <button 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="mt-4 px-6 py-3 bg-[rgb(var(--color-primary))] text-[rgb(var(--color-text-on-primary))] rounded-full font-bold flex items-center gap-2"
-                    >
-                      <ImageIcon size={20} /> Select Media
-                    </button>
-                    <input 
-                      ref={fileInputRef} 
-                      type="file" 
-                      accept="image/*,video/*" 
-                      onChange={handleFileSelect} 
-                      className="hidden" 
-                    />
-                 </div>
-            )}
-          </div>
-        )}
-
-        {/* Footer Controls (no file yet) */}
-        {!mediaFile && (
-            <div className="absolute bottom-0 left-0 w-full p-6 z-20 flex justify-between items-center">
-                {/* Mode Toggles */}
-                <div className="flex gap-4 text-white font-medium">
-                    <button onClick={() => setMode('upload')} className={mode === 'upload' ? 'text-[rgb(var(--color-primary))]' : 'text-gray-400'}>Upload</button>
-                    <button onClick={() => setMode('camera')} className={mode === 'camera' ? 'text-[rgb(var(--color-primary))]' : 'text-gray-400'}>Photo</button>
-                    <button onClick={() => setMode('video')} className={mode === 'video' ? 'text-[rgb(var(--color-primary))]' : 'text-gray-400'}>Video</button>
-                </div>
-                
-                {/* Shutter Button */}
-                <div className="absolute left-1/2 -translate-x-1/2">
-                    {mode === 'camera' && (
-                        <button onClick={takePicture} className="w-16 h-16 rounded-full bg-white border-4 border-white/50" />
-                    )}
-                    {mode === 'video' && (
-                        <button onClick={isRecording ? stopRecording : startRecording} className="w-16 h-16 rounded-full bg-red-500 border-4 border-white/50 flex items-center justify-center">
-                            {isRecording && <div className="w-6 h-6 bg-white rounded-md" />}
-                        </button>
-                    )}
-                </div>
-                
-                {/* Flip Camera */}
-                {(mode === 'camera' || mode === 'video') && (
-                    <button onClick={toggleFacingMode} className="p-3 bg-black/50 rounded-full text-white">
-                        <RefreshCcw size={20} />
-                    </button>
+            {/* 1. PREVIEW MODE (File or GIF selected) */}
+            {hasMedia && (
+            <div className="absolute inset-0 w-full h-full flex items-center justify-center z-10 bg-black">
+                {mediaType === 'image' && (
+                // UPDATED: Universal proportional centering
+                <img 
+                    src={mediaPreviewUrl} 
+                    className="w-full h-full object-contain" 
+                    alt="Preview" 
+                />
                 )}
+                {mediaType === 'video' && (
+                <video src={mediaPreviewUrl} className="w-full h-full object-contain" autoPlay muted loop playsInline />
+                )}
+                
+                {/* Text Overlay Input */}
+                <div className="absolute inset-0 pointer-events-none flex flex-col justify-end pb-20">
+                    <input
+                        type="text"
+                        value={textOverlay}
+                        onChange={(e) => setTextOverlay(e.target.value)}
+                        placeholder="Add a caption..."
+                        className="w-full text-center bg-black/40 text-white text-xl font-medium p-3 outline-none border-none pointer-events-auto backdrop-blur-sm"
+                        style={{ textShadow: '0px 1px 2px rgba(0,0,0,0.8)' }}
+                    />
+                </div>
+            </div>
+            )}
+
+            {/* 2. CAPTURE/SELECT MODES */}
+            {!hasMedia && (
+            <div className="w-full h-full flex flex-col items-center justify-center z-0 relative">
+                
+                {/* Camera View */}
+                {(mode === 'camera' || mode === 'video') && (
+                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                )}
+                
+                {/* Upload View */}
+                {mode === 'upload' && (
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-4 text-center">
+                        <div className="w-20 h-20 bg-[rgb(var(--color-surface-hover))] rounded-full flex items-center justify-center mb-2">
+                            <ImageIcon size={40} className="text-[rgb(var(--color-text-secondary))]" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-white">Gallery</h2>
+                        <p className="text-gray-400 max-w-xs">Share photos and videos from your device.</p>
+                        <button onClick={() => fileInputRef.current?.click()} className="mt-4 px-8 py-3 bg-[rgb(var(--color-primary))] text-white rounded-full font-bold shadow-lg transform active:scale-95 transition">
+                            Select Media
+                        </button>
+                    </div>
+                )}
+
+                {/* GIF Mode View */}
+                {mode === 'gif' && (
+                    <div className="w-full h-full flex flex-col bg-[rgb(var(--color-surface))] pt-20 pb-32">
+                        <div className="px-4 mb-4">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                                <input 
+                                    type="text" 
+                                    value={gifQuery}
+                                    onChange={e => setGifQuery(e.target.value)}
+                                    placeholder="Search Tenor GIFs..."
+                                    className="w-full pl-10 pr-4 py-3 bg-[rgb(var(--color-background))] rounded-xl text-white outline-none focus:ring-2 focus:ring-[rgb(var(--color-primary))]"
+                                    autoFocus
+                                />
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-2">
+                            <div className="grid grid-cols-2 gap-2 pb-4">
+                                {gifs.map(gif => (
+                                    <button 
+                                        key={gif.id}
+                                        onClick={() => {
+                                            setRemoteMediaUrl(gif.media_formats.gif.url);
+                                            setMediaPreviewUrl(gif.media_formats.gif.url); // Use same URL for preview
+                                            setMediaType('image'); // Treat GIF as image
+                                            // Mode stays 'gif' implicitly until hasMedia toggles render
+                                        }}
+                                        className="relative aspect-square rounded-lg overflow-hidden bg-gray-800"
+                                    >
+                                        <img src={gif.media_formats.tinygif.url} className="w-full h-full object-cover" loading="lazy" />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+            )}
+        </div>
+
+        {/* Footer Controls (Only show if no media selected) */}
+        {!hasMedia && (
+            <div className="absolute bottom-0 left-0 w-full z-20 flex flex-col items-center bg-gradient-to-t from-black/80 via-black/40 to-transparent pb-8 pt-12">
+                
+                {/* Shutter Button Row - SHIFTED HIGHER */}
+                <div className="flex items-center justify-center w-full mb-8 relative px-6">
+                    {/* Left: Flip (Camera modes only) */}
+                    <div className="flex-1 flex justify-start">
+                        {(mode === 'camera' || mode === 'video') && (
+                            <button onClick={toggleFacingMode} className="p-3 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition">
+                                <RefreshCcw size={24} />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Center: Shutter */}
+                    <div className="flex-0 mx-4">
+                        {mode === 'camera' && (
+                            <button onClick={takePicture} className="w-20 h-20 rounded-full bg-white border-4 border-white/30 shadow-[0_0_20px_rgba(255,255,255,0.3)] transform active:scale-90 transition-transform" />
+                        )}
+                        {mode === 'video' && (
+                            <button onClick={isRecording ? stopRecording : startRecording} className={`w-20 h-20 rounded-full border-4 border-white/30 flex items-center justify-center transform active:scale-95 transition-all ${isRecording ? 'bg-transparent border-red-500' : 'bg-red-500'}`}>
+                                {isRecording ? <div className="w-8 h-8 bg-red-500 rounded-md animate-pulse" /> : null}
+                            </button>
+                        )}
+                        {(mode === 'upload' || mode === 'gif') && (
+                            <div className="w-20 h-20" /> /* Spacer to keep layout stable */
+                        )}
+                    </div>
+
+                    {/* Right: Spacer */}
+                    <div className="flex-1" />
+                </div>
+                
+                {/* Mode Toggles - Bottom Row */}
+                <div className="flex gap-6 text-sm font-bold uppercase tracking-wider overflow-x-auto max-w-full px-4 no-scrollbar items-center justify-center pb-2">
+                    <button onClick={() => setMode('upload')} className={`transition-colors whitespace-nowrap px-2 py-1 ${mode === 'upload' ? 'text-[rgb(var(--color-primary))]' : 'text-gray-400 hover:text-white'}`}>Gallery</button>
+                    <button onClick={() => setMode('gif')} className={`transition-colors whitespace-nowrap px-2 py-1 ${mode === 'gif' ? 'text-[rgb(var(--color-primary))]' : 'text-gray-400 hover:text-white'}`}>GIF</button>
+                    <button onClick={() => setMode('camera')} className={`transition-colors whitespace-nowrap px-2 py-1 ${mode === 'camera' ? 'text-[rgb(var(--color-primary))]' : 'text-gray-400 hover:text-white'}`}>Photo</button>
+                    <button onClick={() => setMode('video')} className={`transition-colors whitespace-nowrap px-2 py-1 ${mode === 'video' ? 'text-[rgb(var(--color-primary))]' : 'text-gray-400 hover:text-white'}`}>Video</button>
+                </div>
+
+                <input 
+                    ref={fileInputRef} 
+                    type="file" 
+                    accept="image/*,video/*" 
+                    onChange={handleFileSelect} 
+                    className="hidden" 
+                />
             </div>
         )}
 
         {/* Loading Overlay */}
         {isPosting && (
-            <div className="absolute inset-0 z-30 bg-black/70 flex items-center justify-center">
-                <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+            <div className="absolute inset-0 z-30 bg-black/80 flex flex-col items-center justify-center gap-3 backdrop-blur-sm">
+                <div className="w-10 h-10 border-4 border-[rgb(var(--color-primary))] border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-white font-bold animate-pulse">Sharing Status...</span>
             </div>
         )}
       </div>
