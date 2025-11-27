@@ -64,6 +64,7 @@ If you just want to create an account on **Liaoverse** (our official deployment)
 - [x] Custom ringtone for calling in Messages
 - [x] Special event/party mode (activated via App.tsx)
 - [x] Sending GIFs via Tenor (in Messages only)
+- [x] Reposting others' posts
 - [ ] Posting long-form content, e.g. blogs
 - [ ] Hashtags
 - [ ] Custom sounds, e.g. notifications, clicks, etc.
@@ -80,6 +81,7 @@ If you just want to create an account on **Liaoverse** (our official deployment)
 - [ ] Gazebo VC video and screen sharing issues (local works fine)
 - [ ] Groups need better UI/UX for modification, post flairs in feed, etc.
 - [ ] Forums need better UI/UX and allow media attachments
+- [ ] Reposts don't show up on Profiles
 - [ ] Message editing/deleting issues (locally works, not on DB)
       
 ---
