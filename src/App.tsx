@@ -413,7 +413,11 @@ const handleMessageUser = (targetProfile: any) => {
 
   return (
     <div className="min-h-screen bg-[rgb(var(--color-background))]">
-      {/* 4a. RENDER SIDEBAR */}
+      {/* 4a. RENDER SIDEBARS */}
+	<LeftSidebar 
+        show={showLeftSidebar} 
+        onClose={() => setShowLeftSidebar(false)} 
+      />
       <RightSidebar 
         show={showSidebar} 
         onClose={() => setShowSidebar(false)} 
