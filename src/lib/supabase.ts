@@ -27,6 +27,12 @@ export type Post = {
   media_type: 'image' | 'video' | 'document' | 'audio';
   created_at: string;
   profiles?: Profile;
+  comment_count: number;
+  like_count: number;
+  repost_of?: string | null;
+  repost_count?: number;
+  is_repost?: boolean;
+  original_post?: Post;
 };
 
 export type MessageReaction = {
