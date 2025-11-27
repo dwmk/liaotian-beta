@@ -208,7 +208,7 @@ export const Feed = () => {
     setPosts([]);
     setPostPage(0);
     setHasMorePosts(true);
-    let query = supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false });
+    let query = supabase.from('posts').select('*, profiles(*), original_post:repost_of(*, profiles(*))').order('created_at', { ascending: false });
     if (FOLLOW_ONLY_FEED && user) {
       const { data: following } = await supabase.from('follows').select('following_id').eq('follower_id', user.id);
       const followingIds = following?.map(f => f.following_id) || [];
@@ -230,7 +230,7 @@ export const Feed = () => {
     const nextPage = postPage + 1;
     const from = nextPage * POST_PAGE_SIZE;
     const to = from + POST_PAGE_SIZE - 1;
-    let query = supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false });
+    let query = supabase.from('posts').select('*, profiles(*), original_post:repost_of(*, profiles(*))').order('created_at', { ascending: false });
     if (FOLLOW_ONLY_FEED && user) {
       const { data: following } = await supabase.from('follows').select('following_id').eq('follower_id', user.id);
       const followingIds = following?.map(f => f.following_id) || [];
@@ -255,7 +255,7 @@ export const Feed = () => {
     const channel = supabase.channel('feed-updates')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, async (payload) => {
       // Logic to fetch new post
-      const { data } = await supabase.from('posts').select('*, profiles(*)').eq('id', payload.new.id).single();
+      const { data } = await supabase.from('posts').select('*, profiles(*), original_post:repost_of(*, profiles(*))').eq('id', payload.new.id).single();
       if (data) {
           // Optional: Check if post belongs to a group I'm in or a user I follow before adding
           setPosts(current => [{ ...data, like_count: 0, comment_count: 0 }, ...current]);
