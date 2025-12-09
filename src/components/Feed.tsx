@@ -453,7 +453,7 @@ export const Feed = () => {
               <div className="flex items-center gap-1"><span className="text-xs text-[rgb(var(--color-text-secondary))]">or</span><input type="url" value={remoteUrl} onChange={(e) => { setRemoteUrl(e.target.value); setFile(null); }} placeholder="Paste URL..." className="flex-1 min-w-0 px-3 py-1.5 text-sm border border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] rounded-full focus:outline-none focus:border-[rgb(var(--color-accent))] text-[rgb(var(--color-text))]" /></div>
               <button type="submit" disabled={isUploading || (!content.trim() && !file && !remoteUrl.trim())} className="ml-auto bg-[rgba(var(--color-accent),1)] disabled:bg-[rgb(var(--color-border))] text-[rgb(var(--color-text-on-primary))] px-6 py-2 rounded-full hover:bg-[rgba(var(--color-primary),1)] flex items-center gap-2 font-semibold transition"><Send size={16} /> {isUploading ? 'Uploading...' : 'Post'}</button>
             </div>
-          </form>
+          </motion.form>
         ) : (
           <motion.button 
             key="collapsed"
@@ -513,9 +513,9 @@ export const Feed = () => {
           </div>
         )}
         {!isLoadingMorePosts && !hasMorePosts && posts.length > 0 && <div className="text-center py-8 text-sm text-[rgb(var(--color-text-secondary))]">You've reached the end of the feed.</div>}
-        </>
+        </motion.div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 };
