@@ -1,6 +1,7 @@
 // src/App.tsx
 import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Auth } from './components/Auth';
 import { Feed } from './components/Feed';
 import { Messages } from './components/Messages';
@@ -372,8 +373,14 @@ const Main = () => {
   }, [user]);
 
   if (loading) {
+    // Define the SVG path length animation (you'd need to ensure 'logo-fill-animated'
+    // class in your CSS is removed or overridden, but for simplicity, Framer Motion handles it)
+    const transition = { duration: 2, ease: "easeInOut" };
     return (
-        <div
+        <motion.div // motion.div for fade in
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5 }}
             className="min-h-screen bg-[rgb(var(--color-background))] flex flex-col items-center justify-center text-2xl font-bold text-[rgb(var(--color-text))]"
             style={{
                 background: `linear-gradient(to bottom right, rgba(var(--color-surface),0.05), rgba(var(--color-primary),0.05))`,
@@ -384,12 +391,27 @@ const Main = () => {
                     <defs>
                         <clipPath id="logo-clip"><rect id="clip-rect" x="0" y="0" width="100%" height="100%" /></clipPath>
                     </defs>
+                    {/* Path for background */}
                     <path d={SVG_PATH} fill="none" stroke="rgb(var(--color-primary))" strokeWidth="10" strokeOpacity="0.1" />
-                    <path d={SVG_PATH} fill="rgb(var(--color-primary))" clipPath="url(#logo-clip)" className="logo-fill-animated" />
+                    {/* Animated Path */}
+                    <motion.path 
+                       d={SVG_PATH} 
+                       fill="rgb(var(--color-primary))" 
+                       clipPath="url(#logo-clip)" 
+                       initial={{ pathLength: 0 }}
+                       animate={{ pathLength: 1 }}
+                       transition={transition}
+                    />
                 </svg>
             </div>
-            Loading...
-        </div>
+            <motion.div
+               initial={{ y: 20, opacity: 0 }}
+               animate={{ y: 0, opacity: 1 }}
+               transition={{ delay: 1.5, duration: 0.5 }}
+            >
+               Loading...
+            </motion.div>
+        </motion.div>
     );
   }
 
@@ -445,6 +467,14 @@ const handleMessageUser = (targetProfile: any) => {
   };
 
   return (
+	// Define Sidebar/Modal motion props (assuming LeftSidebar/RightSidebar/Notifications/Search
+  // components accept and apply these props to their outermost motion.div)
+  const overlayMotion = {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 },
+    transition: { duration: 0.3 }
+  };
     <div className="min-h-screen bg-[rgb(var(--color-background))]">
       {/* 4a. RENDER SIDEBARS */}
 	<LeftSidebar 
@@ -471,26 +501,56 @@ const handleMessageUser = (targetProfile: any) => {
             <path d={SVG_PATH} fill="rgb(var(--color-primary))" />
           </svg>
           <div className="flex items-center gap-1">
-            <button onClick={() => setShowSearch(true)} className="p-3 rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition">
+            <motion.button // motion.button
+              onClick={() => setShowSearch(true)} 
+              className="p-3 rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+            >
               <SearchIcon size={20} className="text-[rgb(var(--color-text-secondary))]" />
-            </button>
-            <button onClick={() => { setView('feed'); setSelectedProfileId(undefined); setSelectedPostId(undefined); navigate('/'); }} className={`p-3 rounded-full transition ${view === 'feed' ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'}`}>
+            </motion.button>
+            <motion.button // motion.button
+              onClick={() => { setView('feed'); setSelectedProfileId(undefined); setSelectedPostId(undefined); navigate('/'); }} 
+              className={`p-3 rounded-full transition ${view === 'feed' ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'}`}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+            >
               <Home size={20} />
-            </button>
-            <button onClick={() => { setView('messages'); setSelectedProfileId(undefined); setSelectedPostId(undefined); navigate('/message'); }} className={`relative p-3 rounded-full transition ${view === 'messages' ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'}`}>
+            </motion.button>
+            <motion.button // motion.button
+              onClick={() => { setView('messages'); setSelectedProfileId(undefined); setSelectedPostId(undefined); navigate('/message'); }} 
+              className={`relative p-3 rounded-full transition ${view === 'messages' ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'}`}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+            >
               <MessageSquare size={20} />
-              {unreadMessages > 0 && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
-            </button>
-			      <button onClick={handleNotificationsClick} className="relative p-3 rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition">
+              {unreadMessages > 0 && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
+            </motion.button>
+			      <motion.button // motion.button
+              onClick={handleNotificationsClick} 
+              className="relative p-3 rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+            >
               <Bell size={20} className="text-[rgb(var(--color-text-secondary))]" />
-              {unreadNotifications > 0 && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
-            </button>
-            <button onClick={() => { if (!profile?.username) return; navigate(`/?user=${profile.username}`); setSelectedProfileId(undefined); setView('profile'); }} className={`p-3 rounded-full transition ${view === 'profile' && !selectedProfileId ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'}`}>
+              {unreadNotifications > 0 && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
+            </motion.button>
+            <motion.button // motion.button
+              onClick={() => { if (!profile?.username) return; navigate(`/?user=${profile.username}`); setSelectedProfileId(undefined); setView('profile'); }} 
+              className={`p-3 rounded-full transition ${view === 'profile' && !selectedProfileId ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'}`}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+            >
               <User size={20} />
-            </button>
-			<button onClick={() => setShowSidebar(true)} className="p-3 rounded-full hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))] transition">
+            </motion.button>
+			<motion.button // motion.button
+              onClick={() => setShowSidebar(true)} 
+              className="p-3 rounded-full hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))] transition"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+            >
               <Menu size={20} />
-            </button>
+            </motion.button>
           </div>
         </div>
       </nav>
