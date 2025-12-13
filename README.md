@@ -2,7 +2,7 @@
 easy-to-host social platforms for everyone
 
 ```
-Current version: 1.1.0A
+Current version: 1.1.1
 ```
 
 ### What makes LiaoTian (LT) so special from already existing social media/networking platforms?
@@ -66,6 +66,7 @@ If you just want to create an account on **Liaoverse** (our official deployment)
 - [x] Sending GIFs via Tenor (in Messages only)
 - [x] Reposting others' posts
 - [x] Custom badges
+- [x] Mobile-friendly UI layout
 - [ ] Posting long-form content, e.g. blogs
 - [ ] Hashtags
 - [ ] Custom sounds, e.g. notifications, clicks, etc.
