@@ -17,6 +17,10 @@ const NAV_ITEMS = [
   { icon: User, label: 'Profile', path: '/profile' },
 ];
 
+export const SPECIAL_EVENT_MODE = false;
+export const EVENT_MESSAGE = "⚡ SPECIAL EVENT (test): WELCOME TO THE LIAOVERSE! ENJOY THE VIBES! ⚡";
+const EVENT_THEMES = ["https://huanmux.github.io/assets/audio/theme01.mp3", "https://huanmux.github.io/assets/audio/theme02.mp3"];
+
 const MobileNavBar = () => {
   const location = useLocation();
   return (
