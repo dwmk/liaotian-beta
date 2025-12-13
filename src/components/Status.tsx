@@ -197,7 +197,7 @@ export const StatusTray: React.FC = () => {
     
     // 3. Single Status (statusCount === 1) - Reverting to stable Tailwind classes
     if (statusCount === 1) {
-        let className = 'bg-[rgb(var(--color-border))]'; // Default: seen/gray
+        let className = 'bg-[rgb(var(--color-text-secondary))]'; // Default: seen
         if (targetUser.hasUnseen) {
             // Unseen: Use the linear gradient class which works well for a single item
             className = 'bg-gradient-to-tr from-[rgb(var(--color-accent))] to-[rgb(var(--color-primary))] group-hover:scale-105 transition-transform';
@@ -215,7 +215,7 @@ export const StatusTray: React.FC = () => {
     // 4. Multiple Statuses (statusCount > 1) - Conic Gradient Segmented Ring (for segmented look)
     // Seen color: gray/border. Unseen color: Primary/Accent
     const unseenColor = `rgb(var(--color-primary))`; 
-    const seenColor = `rgb(var(--color-border))`;
+    const seenColor = `rgb(var(--color-text-secondary))`;
     const gapDegrees = 3;
     
     const segmentSize = 360 / statusCount;
@@ -248,7 +248,7 @@ export const StatusTray: React.FC = () => {
   };
   
   return (
-    <div className="flex space-x-4 p-4 overflow-x-auto scrollbar-hide bg-[rgb(var(--color-surface))] border-b border-[rgb(var(--color-border))]">
+    <div className="flex space-x-4 p-4 overflow-x-auto scrollbar-hide bg-[rgb(var(--color-surface))] border-b border-[rgb(var(--color-text-secondary))]">
       {/* Own Circle */}
       {ownStatus && (
         <div 
