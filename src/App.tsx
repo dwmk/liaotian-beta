@@ -17,7 +17,7 @@ import { Groups } from './components/Groups';
 import { Forums } from './components/Forums';
 import { Home, MessageSquare, User, LogOut, Search as SearchIcon, Bell, Menu } from 'lucide-react';
 import { supabase } from './lib/supabase';
-import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, useLocation, useNavigate, Link } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
 
 type ViewType = 'feed' | 'messages' | 'profile' | 'settings' | 'page' | 'stats' | 'archive' | 'groups' | 'forums';
@@ -466,6 +466,36 @@ const handleMessageUser = (targetProfile: any) => {
     } catch (error) { console.warn("Could not mark notifications as read."); }
   };
 
+  // --- MOBILE NAV CONFIG ---
+  const MOBILE_NAV_ITEMS = [
+    { 
+      icon: Home, 
+      label: 'Home', 
+      isActive: view === 'feed',
+      action: () => { setView('feed'); setSelectedProfileId(undefined); setSelectedPostId(undefined); navigate('/'); }
+    },
+    { 
+      icon: MessageSquare, 
+      label: 'Messages', 
+      isActive: view === 'messages',
+      badge: unreadMessages,
+      action: () => { setView('messages'); setSelectedProfileId(undefined); setSelectedPostId(undefined); navigate('/message'); }
+    },
+    { 
+      icon: Bell, 
+      label: 'Notifications', 
+      isActive: showNotifications, // Visual indicator
+      badge: unreadNotifications,
+      action: handleNotificationsClick 
+    },
+    { 
+      icon: User, 
+      label: 'Profile', 
+      isActive: view === 'profile' && (!selectedProfileId || selectedProfileId === user.id),
+      action: () => { if (!profile?.username) return; navigate(`/?user=${profile.username}`); setSelectedProfileId(undefined); setView('profile'); }
+    },
+  ];
+
   return (
 	
     <div className="min-h-screen bg-[rgb(var(--color-background))]">
@@ -504,7 +534,7 @@ const handleMessageUser = (targetProfile: any) => {
             </motion.button>
             <motion.button // motion.button
               onClick={() => { setView('feed'); setSelectedProfileId(undefined); setSelectedPostId(undefined); navigate('/'); }} 
-              className={`p-3 rounded-full transition ${view === 'feed' ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'}`}
+              className={`hidden md:flex p-3 rounded-full transition ${view === 'feed' ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'}`}
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
@@ -512,7 +542,7 @@ const handleMessageUser = (targetProfile: any) => {
             </motion.button>
             <motion.button // motion.button
               onClick={() => { setView('messages'); setSelectedProfileId(undefined); setSelectedPostId(undefined); navigate('/message'); }} 
-              className={`relative p-3 rounded-full transition ${view === 'messages' ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'}`}
+              className={`hidden md:flex relative p-3 rounded-full transition ${view === 'messages' ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'}`}
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
@@ -521,7 +551,7 @@ const handleMessageUser = (targetProfile: any) => {
             </motion.button>
 			      <motion.button // motion.button
               onClick={handleNotificationsClick} 
-              className="relative p-3 rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition"
+              className="hidden md:flex relative p-3 rounded-full hover:bg-[rgb(var(--color-surface-hover))] transition"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
@@ -530,7 +560,7 @@ const handleMessageUser = (targetProfile: any) => {
             </motion.button>
             <motion.button // motion.button
               onClick={() => { if (!profile?.username) return; navigate(`/?user=${profile.username}`); setSelectedProfileId(undefined); setView('profile'); }} 
-              className={`p-3 rounded-full transition ${view === 'profile' && !selectedProfileId ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'}`}
+              className={`hidden md:flex p-3 rounded-full transition ${view === 'profile' && !selectedProfileId ? 'bg-[rgba(var(--color-primary),0.1)] text-[rgb(var(--color-primary))]' : 'hover:bg-[rgb(var(--color-surface-hover))] text-[rgb(var(--color-text-secondary))]'}`}
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
@@ -548,7 +578,7 @@ const handleMessageUser = (targetProfile: any) => {
         </div>
       </nav>
 
-      <main className="h-[90vh] overflow-auto">
+      <main className="h-[90vh] overflow-auto pb-24 md:pb-0">
         {view === 'feed' && <Feed />}
         {view === 'messages' && (
 		    <Messages 
@@ -575,8 +605,41 @@ const handleMessageUser = (targetProfile: any) => {
 		  {view === 'forums' && <Forums />}
 		  {view === 'archive' && <StatusArchive />}
       </main>
+
+      {/* NEW MOBILE NAV BAR */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-[rgba(var(--color-surface),0.9)] backdrop-blur-md border-t border-[rgba(var(--color-border),0.5)] md:hidden">
+        <div className="flex justify-around items-center h-20 px-2">
+          {MOBILE_NAV_ITEMS.map((item, index) => {
+            return (
+              <div 
+                key={index} 
+                onClick={item.action} 
+                className="flex flex-col items-center justify-center w-full h-full relative group cursor-pointer"
+              >
+                {item.isActive && (
+                  <motion.div
+                    layoutId="mobile-nav-pill"
+                    className="absolute top-2 w-16 h-8 bg-[rgba(var(--color-primary),0.2)] rounded-full"
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  />
+                )}
+                <div className={`relative p-1 rounded-full transition-colors ${item.isActive ? 'text-[rgb(var(--color-text))]' : 'text-[rgb(var(--color-text-secondary))]'}`}>
+                  <item.icon size={24} strokeWidth={item.isActive ? 2.5 : 2} />
+                  {!!item.badge && item.badge > 0 && (
+                     <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute -top-0 -right-0 w-3 h-3 bg-red-500 rounded-full animate-pulse border-2 border-[rgb(var(--color-surface))]" />
+                  )}
+                </div>
+                <span className={`text-xs mt-1 font-medium ${item.isActive ? 'text-[rgb(var(--color-text))]' : 'text-[rgb(var(--color-text-secondary))]'}`}>
+                  {item.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {view !== 'messages' && (
-        <footer className="text-center text-[rgb(var(--color-text-secondary))] text-xs py-4 border-t border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))]">
+        <footer className="text-center text-[rgb(var(--color-text-secondary))] text-xs py-4 border-t border-[rgb(var(--color-border))] bg-[rgb(var(--color-surface))] hidden md:block">
           © Mux {new Date().getFullYear()}
         </footer>
        )}
